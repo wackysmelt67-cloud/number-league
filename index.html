@@ -69,6 +69,11 @@ button.secondary {
   color: white;
 }
 
+button:disabled, input:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
 input {
   background: #142235;
   border: 1px solid #52677f;
@@ -94,11 +99,29 @@ input {
   overflow-wrap: anywhere;
 }
 
+.result {
+  background: #142235;
+  border: 1px solid #344963;
+  border-radius: 10px;
+  padding: 12px;
+  margin: 8px 0;
+  line-height: 1.8;
+}
+
+.secret-number {
+  color: #55d6be;
+  font-size: 25px;
+  font-weight: bold;
+  letter-spacing: 5px;
+}
+
 footer {
   color: #8294aa;
   font-size: 11px;
   margin-top: 25px;
 }
+
+.hidden { display: none; }
 </style>
 </head>
 
@@ -136,7 +159,11 @@ footer {
     >
 
     <button class="secondary" onclick="joinRoom()">
-      部屋に参加する
+      プレイヤーとして参加
+    </button>
+
+    <button class="secondary" onclick="joinAsSpectator()">
+      観戦者として参加
     </button>
 
     <div id="status" class="status">
@@ -144,13 +171,43 @@ footer {
     </div>
   </section>
 
+  <section id="gamePanel" class="panel hidden">
+    <h2 id="roleTitle">対戦画面</h2>
+
+    <div id="roomInfo" class="note"></div>
+
+    <div id="playerArea" class="hidden">
+      <h2>自分の4桁の数字</h2>
+
+      <input
+        id="secretInput"
+        type="text"
+        inputmode="numeric"
+        maxlength="4"
+        placeholder="例：0123"
+        autocomplete="off"
+      >
+
+      <button id="saveSecretButton" onclick="saveSecret()">
+        数字を登録する
+      </button>
+
+      <div id="playerSecretStatus" class="note">
+        4桁の数字を設定してください。
+      </div>
+    </div>
+
+    <div id="spectatorArea" class="hidden">
+      <h2>観戦画面</h2>
+      <div id="spectatorNumbers"></div>
+    </div>
+  </section>
+
   <div class="note">
     部屋を作った人が部屋コードを友達に共有してください。
   </div>
 
-  <footer>
-    NUMBER LEAGUE ONLINE
-  </footer>
+  <footer>NUMBER LEAGUE ONLINE</footer>
 </main>
 
 <script type="module">
@@ -176,7 +233,7 @@ import {
 
 // Firebase設定
 const firebaseConfig = {
-  apiKey: "AIzaSyCVzrxC-edfIgeVcNOhhFprhX1DHk2KuFY",
+  apiKey: "ここに現在のFirebase APIキー",
   authDomain: "number-league-7c7e6.firebaseapp.com",
   databaseURL: "https://number-league-7c7e6-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "number-league-7c7e6",
@@ -191,6 +248,8 @@ const database = getDatabase(app);
 
 let players = 2;
 let currentRoomUnsubscribe = null;
+let currentRoomCode = null;
+let currentRole = null;
 
 
 // 対戦人数選択
@@ -204,15 +263,155 @@ window.selectMode = function(n) {
 };
 
 
+// 画面表示
+function showGamePanel() {
+  document.getElementById("gamePanel").classList.remove("hidden");
+}
+
+
+// プレイヤー画面
+function showPlayerArea() {
+  showGamePanel();
+
+  document.getElementById("roleTitle").textContent =
+    "プレイヤー画面";
+
+  document.getElementById("playerArea").classList.remove("hidden");
+  document.getElementById("spectatorArea").classList.add("hidden");
+}
+
+
+// 観戦者画面
+function showSpectatorArea() {
+  showGamePanel();
+
+  document.getElementById("roleTitle").textContent =
+    "観戦者画面";
+
+  document.getElementById("playerArea").classList.add("hidden");
+  document.getElementById("spectatorArea").classList.remove("hidden");
+}
+
+
+// 自分の秘密の数字を確認
+async function loadOwnSecret() {
+  const user = auth.currentUser;
+  if (!user || !currentRoomCode) return;
+
+  try {
+    const secretRef = ref(
+      database,
+      "roomSecrets/" + currentRoomCode + "/" + user.uid
+    );
+
+    const snapshot = await get(secretRef);
+
+    const input = document.getElementById("secretInput");
+    const button = document.getElementById("saveSecretButton");
+    const message = document.getElementById("playerSecretStatus");
+
+    if (snapshot.exists()) {
+      input.value = snapshot.val().number;
+      input.disabled = true;
+      button.disabled = true;
+      message.textContent = "数字は登録済みです。変更できません。";
+    } else {
+      input.disabled = false;
+      button.disabled = false;
+      message.textContent = "4桁の数字を設定してください。";
+    }
+
+  } catch (error) {
+    document.getElementById("playerSecretStatus").textContent =
+      "数字の確認エラー：" + error.code;
+  }
+}
+
+
+// 観戦者用：各プレイヤーの数字を個別に取得
+async function loadSpectatorNumbers(room) {
+  const area = document.getElementById("spectatorNumbers");
+  const playerList = room.players || {};
+  const entries = Object.entries(playerList);
+
+  area.textContent = "数字を読み込んでいます...";
+
+  if (entries.length === 0) {
+    area.textContent = "プレイヤーがいません。";
+    return;
+  }
+
+  const results = await Promise.all(
+    entries.map(async ([uid], index) => {
+      try {
+        const secretRef = ref(
+          database,
+          "roomSecrets/" + currentRoomCode + "/" + uid
+        );
+
+        const snapshot = await get(secretRef);
+
+        return {
+          index: index + 1,
+          number: snapshot.exists()
+            ? snapshot.val().number
+            : null
+        };
+
+      } catch (error) {
+        return {
+          index: index + 1,
+          error: error.code
+        };
+      }
+    })
+  );
+
+  area.replaceChildren();
+
+  results.forEach((result) => {
+    const card = document.createElement("div");
+    card.className = "result";
+
+    const title = document.createElement("div");
+    title.textContent = "プレイヤー " + result.index;
+
+    const number = document.createElement("div");
+    number.className = "secret-number";
+
+    if (result.error) {
+      number.textContent = "取得できません";
+    } else if (result.number === null) {
+      number.textContent = "未登録";
+    } else {
+      number.textContent = result.number;
+    }
+
+    card.append(title, number);
+    area.appendChild(card);
+  });
+}
+
+
 // 部屋の監視
-function watchRoom(code) {
+function watchRoom(code, role) {
   if (currentRoomUnsubscribe) {
     currentRoomUnsubscribe();
   }
 
+  currentRoomCode = code;
+  currentRole = role;
+
+  if (role === "player") {
+    showPlayerArea();
+    loadOwnSecret();
+  } else {
+    showSpectatorArea();
+  }
+
   const roomRef = ref(database, "rooms/" + code);
 
-  currentRoomUnsubscribe = onValue(roomRef, (snapshot) => {
+  currentRoomUnsubscribe = onValue(roomRef, async (snapshot) => {
     const room = snapshot.val();
 
     if (!room) {
@@ -222,11 +421,25 @@ function watchRoom(code) {
     }
 
     const count = Object.keys(room.players || {}).length;
+    const spectatorCount =
+      Object.keys(room.spectators || {}).length;
 
     document.getElementById("status").textContent =
       "部屋コード：" + code +
-      " / 参加人数：" + count +
-      "人 / 定員：" + room.maxPlayers + "人";
+      " / プレイヤー：" + count +
+      "人 / 観戦者：" + spectatorCount + "人";
+
+    document.getElementById("roomInfo").textContent =
+      "部屋コード：" + code;
+
+    if (currentRole === "spectator") {
+      await loadSpectatorNumbers(room);
+    }
+
+    if (currentRole === "player") {
+      await loadOwnSecret();
+    }
+
   }, (error) => {
     document.getElementById("status").textContent =
       "監視エラー：" + error.code;
@@ -278,7 +491,7 @@ window.createRoom = async function() {
 
       if (result.committed) {
         document.getElementById("roomCode").value = code;
-        watchRoom(code);
+        watchRoom(code, "player");
         return;
       }
 
@@ -293,7 +506,7 @@ window.createRoom = async function() {
 };
 
 
-// 部屋参加
+// プレイヤー参加
 window.joinRoom = async function() {
   const status = document.getElementById("status");
   const user = auth.currentUser;
@@ -327,6 +540,12 @@ window.joinRoom = async function() {
     const room = snapshot.val();
     const count = Object.keys(room.players || {}).length;
 
+    if (room.spectators && room.spectators[user.uid]) {
+      status.textContent =
+        "このアカウントは観戦者として登録済みです。";
+      return;
+    }
+
     if (!room.players || !room.players[user.uid]) {
       if (count >= room.maxPlayers) {
         status.textContent = "この部屋は満員です。";
@@ -335,16 +554,119 @@ window.joinRoom = async function() {
 
       await set(
         ref(database, "rooms/" + code + "/players/" + user.uid),
-        {
-          joinedAt: Date.now()
-        }
+        { joinedAt: Date.now() }
       );
     }
 
-    watchRoom(code);
+    watchRoom(code, "player");
 
   } catch (error) {
     status.textContent = "参加エラー：" + error.code;
+  }
+};
+
+
+// 観戦者参加
+window.joinAsSpectator = async function() {
+  const status = document.getElementById("status");
+  const user = auth.currentUser;
+
+  if (!user) {
+    status.textContent = "ログイン処理中です。少し待ってください。";
+    return;
+  }
+
+  const code = document.getElementById("roomCode").value
+    .trim()
+    .toUpperCase();
+
+  if (!/^[A-HJ-NP-Z2-9]{8}$/.test(code)) {
+    status.textContent = "8文字の部屋コードを入力してください。";
+    return;
+  }
+
+  status.textContent = "観戦参加しています...";
+
+  try {
+    const roomRef = ref(database, "rooms/" + code);
+    const snapshot = await get(roomRef);
+
+    if (!snapshot.exists()) {
+      status.textContent = "その部屋は存在しません。";
+      return;
+    }
+
+    const room = snapshot.val();
+
+    if (room.players && room.players[user.uid]) {
+      status.textContent =
+        "プレイヤーは観戦者として参加できません。";
+      return;
+    }
+
+    if (!room.spectators || !room.spectators[user.uid]) {
+      await set(
+        ref(database, "rooms/" + code + "/spectators/" + user.uid),
+        { joinedAt: Date.now() }
+      );
+    }
+
+    watchRoom(code, "spectator");
+
+  } catch (error) {
+    status.textContent = "観戦参加エラー：" + error.code;
+  }
+};
+
+
+// 自分の4桁の数字を登録
+window.saveSecret = async function() {
+  const user = auth.currentUser;
+  const status = document.getElementById("playerSecretStatus");
+  const input = document.getElementById("secretInput");
+  const button = document.getElementById("saveSecretButton");
+
+  if (!user || !currentRoomCode || currentRole !== "player") {
+    status.textContent = "プレイヤーとして部屋に参加してください。";
+    return;
+  }
+
+  const number = input.value.trim();
+
+  if (!/^\d{4}$/.test(number)) {
+    status.textContent = "0～9の数字を4桁入力してください。";
+    return;
+  }
+
+  button.disabled = true;
+  status.textContent = "数字を登録しています...";
+
+  try {
+    const secretRef = ref(
+      database,
+      "roomSecrets/" + currentRoomCode + "/" + user.uid
+    );
+
+    const existing = await get(secretRef);
+
+    if (existing.exists()) {
+      status.textContent = "数字はすでに登録されています。";
+      await loadOwnSecret();
+      return;
+    }
+
+    await set(secretRef, {
+      number: number,
+      createdAt: Date.now()
+    });
+
+    input.disabled = true;
+    button.disabled = true;
+    status.textContent = "数字を登録しました！";
+
+  } catch (error) {
+    button.disabled = false;
+    status.textContent = "登録エラー：" + error.code;
   }
 };
 
