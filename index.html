@@ -1,0 +1,109 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101827">
+<title>NUMBER LEAGUE</title>
+<style>
+* { box-sizing:border-box; }
+body {
+  margin:0; min-height:100vh;
+  background:linear-gradient(145deg,#101827,#172d49);
+  color:white; font-family:Arial,"Noto Sans JP",sans-serif;
+  display:flex; justify-content:center; align-items:center;
+  padding:20px;
+}
+main {
+  width:100%; max-width:460px; text-align:center;
+}
+.logo {
+  font-size:13px; letter-spacing:5px;
+  color:#55d6be; font-weight:bold;
+}
+h1 { font-size:38px; margin:12px 0 5px; }
+.subtitle { color:#aab9cc; font-size:13px; }
+.panel {
+  background:#202f43; border:1px solid #344963;
+  border-radius:18px; padding:22px; margin-top:25px;
+}
+h2 { font-size:18px; margin:0 0 17px; }
+button,input {
+  width:100%; padding:15px; border-radius:10px;
+  font-size:16px; margin:7px 0;
+}
+button {
+  border:0; background:#35c9ad; color:#102b35;
+  font-weight:bold; cursor:pointer;
+}
+button.secondary {
+  background:#344963; color:white;
+}
+button:active { transform:scale(.98); }
+input {
+  background:#142235; border:1px solid #52677f;
+  color:white; text-align:center;
+}
+.note {
+  color:#aab9cc; font-size:12px;
+  line-height:1.8; margin-top:18px;
+}
+.status {
+  margin-top:15px; padding:12px;
+  border-radius:9px; background:#142235;
+  color:#f4d58b; font-size:13px; line-height:1.7;
+}
+footer { color:#8294aa; font-size:11px; margin-top:25px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="logo">ONLINE NUMBER BATTLE</div>
+  <h1>NUMBER LEAGUE</h1>
+  <div class="subtitle">数字で勝負する、新しい野球ゲーム。</div>
+
+  <section class="panel">
+    <h2>対戦モード</h2>
+    <button onclick="selectMode(2)">2人対戦</button>
+    <button onclick="selectMode(4)" class="secondary">4人対戦（2対2）</button>
+    <div id="mode" class="note">対戦人数を選択してください。</div>
+  </section>
+
+  <section class="panel">
+    <h2>オンライン対戦</h2>
+    <button onclick="createRoom()">対戦部屋を作る</button>
+    <input id="roomCode" placeholder="友達の部屋コードを入力">
+    <button class="secondary" onclick="joinRoom()">部屋に参加する</button>
+    <div id="status" class="status">
+      オンライン通信の設定は次の工程で行います。
+    </div>
+  </section>
+
+  <footer>NUMBER LEAGUE © 2026</footer>
+</main>
+
+<script>
+let players = 2;
+
+function selectMode(n) {
+  players = n;
+  document.getElementById("mode").textContent =
+    n === 2 ? "2人対戦を選択しました。" :
+    "4人対戦（2対2）を選択しました。";
+}
+
+function createRoom() {
+  document.getElementById("status").textContent =
+    "現在は画面確認用です。次の工程でオンライン部屋を作れるようにします。";
+}
+
+function joinRoom() {
+  const code = document.getElementById("roomCode").value.trim();
+  document.getElementById("status").textContent =
+    code ? "オンライン通信の設定がまだ完了していません。" :
+    "部屋コードを入力してください。";
+}
+</script>
+</body>
+</html>
