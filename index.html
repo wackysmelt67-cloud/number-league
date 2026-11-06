@@ -15,9 +15,7 @@ body {
   display:flex; justify-content:center; align-items:center;
   padding:20px;
 }
-main {
-  width:100%; max-width:460px; text-align:center;
-}
+main { width:100%; max-width:460px; text-align:center; }
 .logo {
   font-size:13px; letter-spacing:5px;
   color:#55d6be; font-weight:bold;
@@ -37,10 +35,7 @@ button {
   border:0; background:#35c9ad; color:#102b35;
   font-weight:bold; cursor:pointer;
 }
-button.secondary {
-  background:#344963; color:white;
-}
-button:active { transform:scale(.98); }
+button.secondary { background:#344963; color:white; }
 input {
   background:#142235; border:1px solid #52677f;
   color:white; text-align:center;
@@ -75,35 +70,74 @@ footer { color:#8294aa; font-size:11px; margin-top:25px; }
     <button onclick="createRoom()">対戦部屋を作る</button>
     <input id="roomCode" placeholder="友達の部屋コードを入力">
     <button class="secondary" onclick="joinRoom()">部屋に参加する</button>
-    <div id="status" class="status">
-      オンライン通信の設定は次の工程で行います。
-    </div>
+    <div id="status" class="status">Firebaseに接続しています...</div>
   </section>
 
   <footer>NUMBER LEAGUE © 2026</footer>
 </main>
 
-<script>
+<script type="module">
+import { initializeApp }
+  from "https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js";
+
+import {
+  getAuth,
+  signInAnonymously,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
+
+import {
+  getDatabase
+} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCVzrxC-edfIgeVcNOhhFprxH1DHk2KuFY",
+  authDomain: "number-league-7c7e6.firebaseapp.com",
+  databaseURL: "https://number-league-7c7e6-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "number-league-7c7e6",
+  storageBucket: "number-league-7c7e6.firebasestorage.app",
+  messagingSenderId: "1000393139268",
+  appId: "1:1000393139268:web:8d49a44ba451295614c811"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const database = getDatabase(app);
+
 let players = 2;
 
-function selectMode(n) {
+window.selectMode = function(n) {
   players = n;
   document.getElementById("mode").textContent =
     n === 2 ? "2人対戦を選択しました。" :
     "4人対戦（2対2）を選択しました。";
-}
+};
 
-function createRoom() {
+window.createRoom = function() {
   document.getElementById("status").textContent =
-    "現在は画面確認用です。次の工程でオンライン部屋を作れるようにします。";
-}
+    "オンライン部屋機能は次の工程で追加します。";
+};
 
-function joinRoom() {
+window.joinRoom = function() {
   const code = document.getElementById("roomCode").value.trim();
   document.getElementById("status").textContent =
-    code ? "オンライン通信の設定がまだ完了していません。" :
+    code ? "部屋への参加機能は次の工程で追加します。" :
     "部屋コードを入力してください。";
-}
+};
+
+onAuthStateChanged(auth, (user) => {
+  const status = document.getElementById("status");
+
+  if (user) {
+    status.textContent =
+      "Firebase接続成功！匿名ログイン済みです。";
+  }
+});
+
+signInAnonymously(auth).catch((error) => {
+  document.getElementById("status").textContent =
+    "接続エラー：" + error.code;
+});
 </script>
 </body>
 </html>
