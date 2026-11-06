@@ -1,5 +1,4 @@
 
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -36,15 +35,8 @@ main {
   font-weight: bold;
 }
 
-h1 {
-  font-size: 38px;
-  margin: 12px 0 5px;
-}
-
-.subtitle {
-  color: #aab9cc;
-  font-size: 13px;
-}
+h1 { font-size: 38px; margin: 12px 0 5px; }
+.subtitle { color: #aab9cc; font-size: 13px; }
 
 .panel {
   background: #202f43;
@@ -54,10 +46,7 @@ h1 {
   margin-top: 25px;
 }
 
-h2 {
-  font-size: 18px;
-  margin: 0 0 17px;
-}
+h2 { font-size: 18px; margin: 0 0 17px; }
 
 button,input {
   width: 100%;
@@ -102,6 +91,7 @@ input {
   color: #f4d58b;
   font-size: 13px;
   line-height: 1.7;
+  overflow-wrap: anywhere;
 }
 
 footer {
@@ -120,10 +110,13 @@ footer {
 
   <section class="panel">
     <h2>対戦モード</h2>
+
     <button onclick="selectMode(2)">2人対戦</button>
+
     <button onclick="selectMode(4)" class="secondary">
       4人対戦（2対2）
     </button>
+
     <div id="mode" class="note">
       対戦人数を選択してください。
     </div>
@@ -131,17 +124,33 @@ footer {
 
   <section class="panel">
     <h2>オンライン対戦</h2>
-    <button onclick="createRoom()">対戦部屋を作る</button>
-    <input id="roomCode" placeholder="友達の部屋コードを入力">
+
+    <button onclick="createRoom()">部屋を作る</button>
+
+    <input
+      id="roomCode"
+      type="text"
+      maxlength="8"
+      placeholder="8文字の部屋コード"
+      autocomplete="off"
+    >
+
     <button class="secondary" onclick="joinRoom()">
       部屋に参加する
     </button>
+
     <div id="status" class="status">
       Firebaseに接続しています...
     </div>
   </section>
 
-  <footer>NUMBER LEAGUE © 2026</footer>
+  <div class="note">
+    部屋を作った人が部屋コードを友達に共有してください。
+  </div>
+
+  <footer>
+    NUMBER LEAGUE ONLINE
+  </footer>
 </main>
 
 <script type="module">
@@ -165,175 +174,9 @@ import {
 } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-database.js";
 
 
+// Firebase設定
 const firebaseConfig = {
-  apiKey: "
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#101827">
-<title>NUMBER LEAGUE</title>
-
-<style>
-* { box-sizing: border-box; }
-
-body {
-  margin: 0;
-  min-height: 100vh;
-  background: linear-gradient(145deg,#101827,#172d49);
-  color: white;
-  font-family: Arial,"Noto Sans JP",sans-serif;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 20px;
-}
-
-main {
-  width: 100%;
-  max-width: 460px;
-  text-align: center;
-}
-
-.logo {
-  font-size: 13px;
-  letter-spacing: 5px;
-  color: #55d6be;
-  font-weight: bold;
-}
-
-h1 {
-  font-size: 38px;
-  margin: 12px 0 5px;
-}
-
-.subtitle {
-  color: #aab9cc;
-  font-size: 13px;
-}
-
-.panel {
-  background: #202f43;
-  border: 1px solid #344963;
-  border-radius: 18px;
-  padding: 22px;
-  margin-top: 25px;
-}
-
-h2 {
-  font-size: 18px;
-  margin: 0 0 17px;
-}
-
-button,input {
-  width: 100%;
-  padding: 15px;
-  border-radius: 10px;
-  font-size: 16px;
-  margin: 7px 0;
-}
-
-button {
-  border: 0;
-  background: #35c9ad;
-  color: #102b35;
-  font-weight: bold;
-  cursor: pointer;
-}
-
-button.secondary {
-  background: #344963;
-  color: white;
-}
-
-input {
-  background: #142235;
-  border: 1px solid #52677f;
-  color: white;
-  text-align: center;
-}
-
-.note {
-  color: #aab9cc;
-  font-size: 12px;
-  line-height: 1.8;
-  margin-top: 18px;
-}
-
-.status {
-  margin-top: 15px;
-  padding: 12px;
-  border-radius: 9px;
-  background: #142235;
-  color: #f4d58b;
-  font-size: 13px;
-  line-height: 1.7;
-}
-
-footer {
-  color: #8294aa;
-  font-size: 11px;
-  margin-top: 25px;
-}
-</style>
-</head>
-
-<body>
-<main>
-  <div class="logo">ONLINE NUMBER BATTLE</div>
-  <h1>NUMBER LEAGUE</h1>
-  <div class="subtitle">数字で勝負する、新しい野球ゲーム。</div>
-
-  <section class="panel">
-    <h2>対戦モード</h2>
-    <button onclick="selectMode(2)">2人対戦</button>
-    <button onclick="selectMode(4)" class="secondary">
-      4人対戦（2対2）
-    </button>
-    <div id="mode" class="note">
-      対戦人数を選択してください。
-    </div>
-  </section>
-
-  <section class="panel">
-    <h2>オンライン対戦</h2>
-    <button onclick="createRoom()">対戦部屋を作る</button>
-    <input id="roomCode" placeholder="友達の部屋コードを入力">
-    <button class="secondary" onclick="joinRoom()">
-      部屋に参加する
-    </button>
-    <div id="status" class="status">
-      Firebaseに接続しています...
-    </div>
-  </section>
-
-  <footer>NUMBER LEAGUE © 2026</footer>
-</main>
-
-<script type="module">
-
-import { initializeApp }
-from "https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js";
-
-import {
-  getAuth,
-  signInAnonymously,
-  onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
-
-import {
-  getDatabase,
-  ref,
-  set,
-  get,
-  onValue,
-  runTransaction
-} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-database.js";
-
-
-const firebaseConfig = {
-  apiKey: "ここに現在のAPIキーを入れる",
+  apiKey: "ここに現在のFirebase APIキーを入れる",
   authDomain: "number-league-7c7e6.firebaseapp.com",
   databaseURL: "https://number-league-7c7e6-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "number-league-7c7e6",
@@ -341,7 +184,6 @@ const firebaseConfig = {
   messagingSenderId: "1000393139268",
   appId: "1:1000393139268:web:8d49a44ba451295614c811"
 };
-
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -351,6 +193,7 @@ let players = 2;
 let currentRoomUnsubscribe = null;
 
 
+// 対戦人数選択
 window.selectMode = function(n) {
   players = n;
 
@@ -361,8 +204,8 @@ window.selectMode = function(n) {
 };
 
 
+// 部屋の監視
 function watchRoom(code) {
-
   if (currentRoomUnsubscribe) {
     currentRoomUnsubscribe();
   }
@@ -370,7 +213,6 @@ function watchRoom(code) {
   const roomRef = ref(database, "rooms/" + code);
 
   currentRoomUnsubscribe = onValue(roomRef, (snapshot) => {
-
     const room = snapshot.val();
 
     if (!room) {
@@ -383,27 +225,30 @@ function watchRoom(code) {
 
     document.getElementById("status").textContent =
       "部屋コード：" + code +
-      " / 参加人数：" + count + "人 / 定員：" +
-      room.maxPlayers + "人";
-
+      " / 参加人数：" + count +
+      "人 / 定員：" + room.maxPlayers + "人";
+  }, (error) => {
+    document.getElementById("status").textContent =
+      "監視エラー：" + error.code;
   });
 }
 
 
+// 部屋作成
 window.createRoom = async function() {
-
+  const status = document.getElementById("status");
   const user = auth.currentUser;
 
   if (!user) {
-    document.getElementById("status").textContent =
-      "ログイン処理中です。少し待ってください。";
+    status.textContent = "ログイン処理中です。少し待ってください。";
     return;
   }
+
+  status.textContent = "部屋を作成しています...";
 
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
   for (let i = 0; i < 5; i++) {
-
     const random = crypto.getRandomValues(new Uint8Array(8));
 
     const code = Array.from(
@@ -426,7 +271,6 @@ window.createRoom = async function() {
     };
 
     try {
-
       const result = await runTransaction(
         roomRef,
         current => current === null ? roomData : undefined
@@ -439,26 +283,23 @@ window.createRoom = async function() {
       }
 
     } catch (error) {
-
-      document.getElementById("status").textContent =
-        "部屋作成エラー：" + error.code;
+      status.textContent = "部屋作成エラー：" + error.code;
       return;
-
     }
   }
 
-  document.getElementById("status").textContent =
+  status.textContent =
     "部屋を作成できませんでした。もう一度お試しください。";
 };
 
 
+// 部屋参加
 window.joinRoom = async function() {
-
+  const status = document.getElementById("status");
   const user = auth.currentUser;
 
   if (!user) {
-    document.getElementById("status").textContent =
-      "ログイン処理中です。少し待ってください。";
+    status.textContent = "ログイン処理中です。少し待ってください。";
     return;
   }
 
@@ -467,20 +308,19 @@ window.joinRoom = async function() {
     .toUpperCase();
 
   if (!/^[A-HJ-NP-Z2-9]{8}$/.test(code)) {
-    document.getElementById("status").textContent =
-      "8文字の部屋コードを入力してください。";
+    status.textContent = "8文字の部屋コードを入力してください。";
     return;
   }
+
+  status.textContent = "部屋を確認しています...";
 
   const roomRef = ref(database, "rooms/" + code);
 
   try {
-
     const snapshot = await get(roomRef);
 
     if (!snapshot.exists()) {
-      document.getElementById("status").textContent =
-        "その部屋は存在しません。";
+      status.textContent = "その部屋は存在しません。";
       return;
     }
 
@@ -488,250 +328,42 @@ window.joinRoom = async function() {
     const count = Object.keys(room.players || {}).length;
 
     if (!room.players || !room.players[user.uid]) {
-
       if (count >= room.maxPlayers) {
-        document.getElementById("status").textContent =
-          "この部屋は満員です。";
+        status.textContent = "この部屋は満員です。";
         return;
       }
 
       await set(
         ref(database, "rooms/" + code + "/players/" + user.uid),
-        { joinedAt: Date.now() }
-      );
-
-    }
-
-    watchRoom(code);
-
-  } catch (error) {
-
-    document.getElementById("status").textContent =
-      "参加エラー：" + error.code;
-
-  }
-};
-
-
-onAuthStateChanged(auth, (user) => {
-
-  const status = document.getElementById("status");
-
-  if (user) {
-    status.textContent =
-      "Firebase接続成功！匿名ログイン済みです。";
-  }
-
-});
-
-
-signInAnonymously(auth).catch((error) => {
-
-  document.getElementById("status").textContent =
-    "接続エラー：" + error.code;
-
-});
-
-</script>
-</body>
-</html>
-",
-  authDomain: "number-league-7c7e6.firebaseapp.com",
-  databaseURL: "https://number-league-7c7e6-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "number-league-7c7e6",
-  storageBucket: "number-league-7c7e6.firebasestorage.app",
-  messagingSenderId: "1000393139268",
-  appId: "1:1000393139268:web:8d49a44ba451295614c811"
-};
-
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const database = getDatabase(app);
-
-let players = 2;
-let currentRoomUnsubscribe = null;
-
-
-window.selectMode = function(n) {
-  players = n;
-
-  document.getElementById("mode").textContent =
-    n === 2
-      ? "2人対戦を選択しました。"
-      : "4人対戦（2対2）を選択しました。";
-};
-
-
-function watchRoom(code) {
-
-  if (currentRoomUnsubscribe) {
-    currentRoomUnsubscribe();
-  }
-
-  const roomRef = ref(database, "rooms/" + code);
-
-  currentRoomUnsubscribe = onValue(roomRef, (snapshot) => {
-
-    const room = snapshot.val();
-
-    if (!room) {
-      document.getElementById("status").textContent =
-        "部屋が見つかりません。";
-      return;
-    }
-
-    const count = Object.keys(room.players || {}).length;
-
-    document.getElementById("status").textContent =
-      "部屋コード：" + code +
-      " / 参加人数：" + count + "人 / 定員：" +
-      room.maxPlayers + "人";
-
-  });
-}
-
-
-window.createRoom = async function() {
-
-  const user = auth.currentUser;
-
-  if (!user) {
-    document.getElementById("status").textContent =
-      "ログイン処理中です。少し待ってください。";
-    return;
-  }
-
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-  for (let i = 0; i < 5; i++) {
-
-    const random = crypto.getRandomValues(new Uint8Array(8));
-
-    const code = Array.from(
-      random,
-      n => chars[n % chars.length]
-    ).join("");
-
-    const roomRef = ref(database, "rooms/" + code);
-
-    const roomData = {
-      hostUid: user.uid,
-      mode: players,
-      maxPlayers: players,
-      createdAt: Date.now(),
-      players: {
-        [user.uid]: {
+        {
           joinedAt: Date.now()
         }
-      }
-    };
-
-    try {
-
-      const result = await runTransaction(
-        roomRef,
-        current => current === null ? roomData : undefined
       );
-
-      if (result.committed) {
-        document.getElementById("roomCode").value = code;
-        watchRoom(code);
-        return;
-      }
-
-    } catch (error) {
-
-      document.getElementById("status").textContent =
-        "部屋作成エラー：" + error.code;
-      return;
-
-    }
-  }
-
-  document.getElementById("status").textContent =
-    "部屋を作成できませんでした。もう一度お試しください。";
-};
-
-
-window.joinRoom = async function() {
-
-  const user = auth.currentUser;
-
-  if (!user) {
-    document.getElementById("status").textContent =
-      "ログイン処理中です。少し待ってください。";
-    return;
-  }
-
-  const code = document.getElementById("roomCode").value
-    .trim()
-    .toUpperCase();
-
-  if (!/^[A-HJ-NP-Z2-9]{8}$/.test(code)) {
-    document.getElementById("status").textContent =
-      "8文字の部屋コードを入力してください。";
-    return;
-  }
-
-  const roomRef = ref(database, "rooms/" + code);
-
-  try {
-
-    const snapshot = await get(roomRef);
-
-    if (!snapshot.exists()) {
-      document.getElementById("status").textContent =
-        "その部屋は存在しません。";
-      return;
-    }
-
-    const room = snapshot.val();
-    const count = Object.keys(room.players || {}).length;
-
-    if (!room.players || !room.players[user.uid]) {
-
-      if (count >= room.maxPlayers) {
-        document.getElementById("status").textContent =
-          "この部屋は満員です。";
-        return;
-      }
-
-      await set(
-        ref(database, "rooms/" + code + "/players/" + user.uid),
-        { joinedAt: Date.now() }
-      );
-
     }
 
     watchRoom(code);
 
   } catch (error) {
-
-    document.getElementById("status").textContent =
-      "参加エラー：" + error.code;
-
+    status.textContent = "参加エラー：" + error.code;
   }
 };
 
 
+// ログイン状態確認
 onAuthStateChanged(auth, (user) => {
-
   const status = document.getElementById("status");
 
   if (user) {
     status.textContent =
       "Firebase接続成功！匿名ログイン済みです。";
   }
-
 });
 
 
+// 匿名ログイン
 signInAnonymously(auth).catch((error) => {
-
   document.getElementById("status").textContent =
     "接続エラー：" + error.code;
-
 });
 
 </script>
