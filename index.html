@@ -87,9 +87,13 @@ import {
 } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
 
 import {
-  getDatabase
+  getDatabase,
+  ref,
+  set,
+  get,
+  onValue,
+  runTransaction
 } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-database.js";
-
 const firebaseConfig = {
   apiKey: "AIzaSyCVzrxC-edfIgeVcNOhhFprhX1DHk2KuFY",
   authDomain: "number-league-7c7e6.firebaseapp.com",
@@ -106,11 +110,140 @@ const database = getDatabase(app);
 
 let players = 2;
 
-window.selectMode = function(n) {
-  players = n;
-  document.getElementById("mode").textContent =
-    n === 2 ? "2人対戦を選択しました。" :
-    "4人対戦（2対2）を選択しました。";
+let currentRoomUnsubscribe = null;
+
+function watchRoom(code) {
+  if (currentRoomUnsubscribe) {
+    currentRoomUnsubscribe();
+  }
+
+  const roomRef = ref(database, "rooms/" + code);
+
+  currentRoomUnsubscribe = onValue(roomRef, (snapshot) => {
+    const room = snapshot.val();
+
+    if (!room) {
+      document.getElementById("status").textContent =
+        "部屋が見つかりません。";
+      return;
+    }
+
+    const count = Object.keys(room.players || {}).length;
+
+    document.getElementById("status").textContent =
+      "部屋コード：" + code +
+      " / 参加人数：" + count + "人 / 定員：" +
+      room.maxPlayers + "人";
+  });
+}
+
+window.createRoom = async function() {
+  const user = auth.currentUser;
+
+  if (!user) {
+    document.getElementById("status").textContent =
+      "ログイン処理中です。少し待ってください。";
+    return;
+  }
+
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+  for (let i = 0; i < 5; i++) {
+    const random = crypto.getRandomValues(new Uint8Array(8));
+
+    const code = Array.from(
+      random,
+      n => chars[n % chars.length]
+    ).join("");
+
+    const roomRef = ref(database, "rooms/" + code);
+
+    const roomData = {
+      hostUid: user.uid,
+      mode: players,
+      maxPlayers: players,
+      createdAt: Date.now(),
+      players: {
+        [user.uid]: {
+          joinedAt: Date.now()
+        }
+      }
+    };
+
+    try {
+      const result = await runTransaction(
+        roomRef,
+        current => current === null ? roomData : undefined
+      );
+
+      if (result.committed) {
+        document.getElementById("roomCode").value = code;
+        watchRoom(code);
+        return;
+      }
+    } catch (error) {
+      document.getElementById("status").textContent =
+        "部屋作成エラー：" + error.code;
+      return;
+    }
+  }
+
+  document.getElementById("status").textContent =
+    "部屋を作成できませんでした。もう一度お試しください。";
+};
+
+window.joinRoom = async function() {
+  const user = auth.currentUser;
+
+  if (!user) {
+    document.getElementById("status").textContent =
+      "ログイン処理中です。少し待ってください。";
+    return;
+  }
+
+  const code = document.getElementById("roomCode").value
+    .trim()
+    .toUpperCase();
+
+  if (!/^[A-HJ-NP-Z2-9]{8}$/.test(code)) {
+    document.getElementById("status").textContent =
+      "8文字の部屋コードを入力してください。";
+    return;
+  }
+
+  const roomRef = ref(database, "rooms/" + code);
+
+  try {
+    const snapshot = await get(roomRef);
+
+    if (!snapshot.exists()) {
+      document.getElementById("status").textContent =
+        "その部屋は存在しません。";
+      return;
+    }
+
+    const room = snapshot.val();
+    const count = Object.keys(room.players || {}).length;
+
+    if (!room.players || !room.players[user.uid]) {
+      if (count >= room.maxPlayers) {
+        document.getElementById("status").textContent =
+          "この部屋は満員です。";
+        return;
+      }
+
+      await set(
+        ref(database, "rooms/" + code + "/players/" + user.uid),
+        { joinedAt: Date.now() }
+      );
+    }
+
+    watchRoom(code);
+
+  } catch (error) {
+    document.getElementById("status").textContent =
+      "参加エラー：" + error.code;
+  }
 };
 
 window.createRoom = function() {
