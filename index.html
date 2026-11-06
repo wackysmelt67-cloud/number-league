@@ -137,6 +137,33 @@ function watchRoom(code) {
   });
 }
 
+let currentRoomUnsubscribe = null;
+
+function watchRoom(code) {
+  if (currentRoomUnsubscribe) {
+    currentRoomUnsubscribe();
+  }
+
+  const roomRef = ref(database, "rooms/" + code);
+
+  currentRoomUnsubscribe = onValue(roomRef, (snapshot) => {
+    const room = snapshot.val();
+
+    if (!room) {
+      document.getElementById("status").textContent =
+        "部屋が見つかりません。";
+      return;
+    }
+
+    const count = Object.keys(room.players || {}).length;
+
+    document.getElementById("status").textContent =
+      "部屋コード：" + code +
+      " / 参加人数：" + count + "人 / 定員：" +
+      room.maxPlayers + "人";
+  });
+}
+
 window.createRoom = async function() {
   const user = auth.currentUser;
 
@@ -244,18 +271,6 @@ window.joinRoom = async function() {
     document.getElementById("status").textContent =
       "参加エラー：" + error.code;
   }
-};
-
-window.createRoom = function() {
-  document.getElementById("status").textContent =
-    "オンライン部屋機能は次の工程で追加します。";
-};
-
-window.joinRoom = function() {
-  const code = document.getElementById("roomCode").value.trim();
-  document.getElementById("status").textContent =
-    code ? "部屋への参加機能は次の工程で追加します。" :
-    "部屋コードを入力してください。";
 };
 
 onAuthStateChanged(auth, (user) => {
