@@ -93,7 +93,6 @@ input,select{
  overflow-y:auto;text-align:left;font-size:13px
 }
 .chat-message{padding:6px 3px;border-bottom:1px solid #344963;overflow-wrap:anywhere}
-.chat-message small{color:#aab9cc}
 #lastResult{font-size:20px;font-weight:bold;padding:18px 12px;border-color:#55d6be}
 .score-stats{font-size:14px;color:#d5e2ef;margin-top:5px}
 .batting-stats{background:#142235;border:1px solid #344963;border-radius:10px;padding:12px;margin:10px 0;text-align:left}
@@ -115,6 +114,36 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 <button onclick="selectMode(3)" class="secondary">1対2</button>
 <button onclick="selectMode(4)" class="secondary">2対2</button>
 <div id="modeText" class="note">対戦形式を選択してください。</div>
+</section>
+
+<!-- CPU対戦設定 -->
+<section class="panel">
+<h2>CPU対戦</h2>
+<div class="note">1人でCPUチームと対戦できます。</div>
+
+<label class="setting-label">自分のチーム</label>
+<select id="cpuUserTeam">
+<option value="first">先攻</option>
+<option value="second">後攻</option>
+</select>
+
+<label class="setting-label">CPUの強さ</label>
+<select id="cpuDifficulty">
+<option value="weak">弱い</option>
+<option value="normal" selected>普通</option>
+<option value="strong">強い</option>
+</select>
+
+<label class="setting-label">イニング数</label>
+<select id="cpuInnings">
+<option value="3">3イニング</option>
+<option value="5">5イニング</option>
+<option value="7">7イニング</option>
+<option value="9" selected>9イニング</option>
+</select>
+
+<button onclick="startCpuGame()">CPU対戦を開始</button>
+<div class="note">オンライン対戦とは別のモードです。</div>
 </section>
 
 <section class="panel">
@@ -146,6 +175,76 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 <button class="secondary" onclick="joinRoom()">プレイヤーとして参加</button>
 <button class="secondary" onclick="joinAsSpectator()">観戦者として参加</button>
 <div id="status" class="status">Firebaseに接続しています...</div>
+</section>
+
+<!-- CPU試合画面 -->
+<section id="cpuGamePanel" class="panel hidden">
+<h2>CPU対戦画面</h2>
+
+<div class="result">
+ <div id="cpuDifficultyText"></div>
+ <div id="cpuTeamText"></div>
+</div>
+
+<div class="scoreboard">
+ <div class="score">
+  <small id="cpuTeamName1">先攻</small>
+  <strong id="cpuScore1">0</strong>
+  <small>得点</small>
+  <div class="score-stats">安打 <strong id="cpuHits1">0</strong></div>
+ </div>
+ <div class="score">
+  <small id="cpuTeamName2">後攻</small>
+  <strong id="cpuScore2">0</strong>
+  <small>得点</small>
+  <div class="score-stats">安打 <strong id="cpuHits2">0</strong></div>
+ </div>
+</div>
+
+<div class="info-grid">
+ <div class="info"><small>イニング</small><strong id="cpuInning">1</strong></div>
+ <div class="info"><small>攻守</small><strong id="cpuHalf">表</strong></div>
+ <div class="info"><small>アウト</small><strong id="cpuOuts">0</strong></div>
+</div>
+
+<div id="cpuTurnInfo" class="result"></div>
+<div class="note">ランナー状況</div>
+<div class="bases">
+ <div id="cpuBase2" class="base"><span>2塁</span></div>
+ <div id="cpuBase3" class="base"><span>3塁</span></div>
+ <div id="cpuBase1" class="base"><span>1塁</span></div>
+ <div class="base" style="grid-column:2;grid-row:3;border-color:#55d6be"><span>ホーム</span></div>
+</div>
+
+<div id="cpuLastResult" class="result">試合開始前です。</div>
+
+<label class="sound-setting">
+<input id="cpuSoundEnabled" type="checkbox" checked style="width:auto;margin-right:6px">
+効果音 ON
+</label>
+
+<div id="cpuDefenseArea" class="hidden">
+<h2>ピッチャー：秘密の数字</h2>
+<p class="note">今回の打席で守る4桁の数字を入力してください。</p>
+<input id="cpuDefenseInput" inputmode="numeric" maxlength="4" placeholder="例：0123">
+<button onclick="cpuSubmitDefense()">数字を設定する</button>
+</div>
+
+<div id="cpuAttackArea" class="hidden">
+<h2>バッター：数字を予想</h2>
+<p class="note">予想できるのは1回だけです。</p>
+<input id="cpuGuessInput" inputmode="numeric" maxlength="4" placeholder="4桁の数字">
+<button onclick="cpuSubmitGuess()">予想する</button>
+</div>
+
+<div id="cpuWaitingArea" class="note hidden">CPUの操作を待っています...</div>
+
+<div id="cpuFinishedArea" class="result hidden">
+<h2>試合終了</h2>
+<div id="cpuFinalResult"></div>
+</div>
+
+<button class="danger" onclick="exitCpuGame()">CPU対戦を終了する</button>
 </section>
 
 <section id="gamePanel" class="panel hidden">
@@ -272,7 +371,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-database.js";
 
 const firebaseConfig={
- apiKey:"AIzaSyCVzrxC-edfIgeVcNOhhFprhX1DHk2KuFY",
+ apiKey:"AIzaSyCVzrxC-edfIgeVcNOhhFprxH1DHk2KuFY",
  authDomain:"number-league-7c7e6.firebaseapp.com",
  databaseURL:"https://number-league-7c7e6-default-rtdb.asia-southeast1.firebasedatabase.app",
  projectId:"number-league-7c7e6",
@@ -320,7 +419,7 @@ function getEnteredName(){
 }
 
 const savedPlayerName=localStorage.getItem("numberLeaguePlayerName")||"";
-if(("playerName"))("playerName").value=savedPlayerName;
+$("playerName").value=savedPlayerName;
 
 window.savePlayerName=async()=>{
  const name=cleanPlayerName($("lobbyPlayerName")?.value);
@@ -336,7 +435,7 @@ window.savePlayerName=async()=>{
    :"rooms/"+currentRoomCode+"/players/"+uid();
   await update(ref(database,path),{name});
   localStorage.setItem("numberLeaguePlayerName",name);
-  if(("playerName"))("playerName").value=name;
+  $("playerName").value=name;
   status("名前を「"+name+"」に変更しました。");
  }catch(e){
   status("名前の保存に失敗しました："+e.message);
@@ -535,7 +634,7 @@ function renderLobby(){
  const myName=spectator
   ?(currentRoom.spectators?.[uid()]?.name||localStorage.getItem("numberLeaguePlayerName")||"")
   :(me?.name||localStorage.getItem("numberLeaguePlayerName")||"");
- if(("lobbyPlayerName")&&document.activeElement!==("lobbyPlayerName"))
+ if(document.activeElement!==$("lobbyPlayerName"))
   $("lobbyPlayerName").value=myName;
 
  if(spectator){
@@ -593,9 +692,9 @@ function renderLobby(){
   hide("startButton");
  }
 
- if(!spectator)show("chatArea");
- else show("chatArea");
+ show("chatArea");
 }
+
 window.changeTeam=async()=>{
  if(!currentRoom||isSpectator())return;
  const me=myPlayer();
@@ -1088,7 +1187,6 @@ function calculateNext(g,hits,secret,guess){
   next.outs=0;
 
   if(g.half==="表"){
-   // 規定最終回の表終了時点で後攻がリードしていれば試合終了
    if(
     next.inning>=next.maxInnings&&
     (next.scores.second||0)>(next.scores.first||0)
@@ -1099,7 +1197,6 @@ function calculateNext(g,hits,secret,guess){
    }
 
    next.half="裏";
-   // 延長戦は各チームの攻撃開始時に一・二塁へランナーを置く
    next.bases=next.inning>next.maxInnings
     ?[true,true,false]
     :[false,false,false];
@@ -1108,13 +1205,11 @@ function calculateNext(g,hits,secret,guess){
    const secondScore=next.scores.second||0;
 
    if(next.inning>=next.maxInnings){
-    // 規定回または延長回の裏が終わり、同点でなければ決着
     if(firstScore!==secondScore){
      next.bases=[false,false,false];
      next.phase="finished";
      return next;
     }
-    // 同点なら次の延長回へ。延長回の表も一・二塁から開始
     next.inning++;
     next.half="表";
     next.bases=[true,true,false];
@@ -1210,6 +1305,7 @@ window.switchPitcher=async()=>{
 
  if(result.committed)status("投手を交代しました。");
 };
+
 window.leaveGame=async()=>{
  if(isSpectator())return;
  if(!confirm("一時退出しますか？"))return;
@@ -1426,6 +1522,351 @@ window.copyRoomCode=async()=>{
  }
 };
 
+/* ==========================
+   CPU対戦機能
+========================== */
+
+let cpuGame=null;
+let cpuTimer=null;
+
+function cpuRandomNumber(difficulty){
+ let digits=[];
+
+ if(difficulty==="weak"){
+  const patterns=["0000","1111","1234","2222","0123","9999","1000"];
+  return patterns[Math.floor(Math.random()*patterns.length)];
+ }
+
+ if(difficulty==="strong"){
+  const pool="0123456789";
+  while(digits.length<4){
+   const d=pool[Math.floor(Math.random()*pool.length)];
+   if(!digits.includes(d))digits.push(d);
+  }
+  return digits.join("");
+ }
+
+ for(let i=0;i<4;i++){
+  digits.push(String(Math.floor(Math.random()*10)));
+ }
+ return digits.join("");
+}
+
+function cpuGuessNumber(difficulty){
+ if(difficulty==="weak"){
+  const patterns=["0000","1111","1234","2222","0123","9999"];
+  return patterns[Math.floor(Math.random()*patterns.length)];
+ }
+ return cpuRandomNumber(difficulty);
+}
+
+function cpuBattingTeam(){
+ return cpuGame.half==="表"?"first":"second";
+}
+
+function cpuDefendingTeam(){
+ return cpuGame.half==="表"?"second":"first";
+}
+
+function cpuUserIsBatting(){
+ return cpuBattingTeam()===cpuGame.userTeam;
+}
+
+function cpuPlaySound(hits){
+ if(!$("cpuSoundEnabled").checked)return;
+ try{
+  const AudioCtx=window.AudioContext||window.webkitAudioContext;
+  if(!AudioCtx)return;
+  const ctx=new AudioCtx();
+  const patterns={0:[220,160],1:[440],2:[440,660],3:[440,660,880],4:[523,659,784,1047]};
+  const notes=patterns[hits]||[330];
+  const start=ctx.currentTime;
+
+  notes.forEach((freq,i)=>{
+   const osc=ctx.createOscillator();
+   const gain=ctx.createGain();
+   osc.type=hits===0?"triangle":"sine";
+   osc.frequency.value=freq;
+   gain.gain.setValueAtTime(0.0001,start+i*0.12);
+   gain.gain.exponentialRampToValueAtTime(0.12,start+i*0.12+0.02);
+   gain.gain.exponentialRampToValueAtTime(0.0001,start+i*0.12+0.18);
+   osc.connect(gain);
+   gain.connect(ctx.destination);
+   osc.start(start+i*0.12);
+   osc.stop(start+i*0.12+0.2);
+  });
+  setTimeout(()=>ctx.close(),1500);
+ }catch(e){}
+}
+
+function cpuPlayTransition(type){
+ if(!$("cpuSoundEnabled").checked)return;
+ try{
+  const AudioCtx=window.AudioContext||window.webkitAudioContext;
+  if(!AudioCtx)return;
+  const ctx=new AudioCtx();
+  const notes=type==="side"?[330,440,660]:[660,523];
+  const start=ctx.currentTime;
+
+  notes.forEach((freq,i)=>{
+   const osc=ctx.createOscillator();
+   const gain=ctx.createGain();
+   osc.type="sine";
+   osc.frequency.value=freq;
+   gain.gain.setValueAtTime(0.0001,start+i*0.13);
+   gain.gain.exponentialRampToValueAtTime(0.1,start+i*0.13+0.02);
+   gain.gain.exponentialRampToValueAtTime(0.0001,start+i*0.13+0.16);
+   osc.connect(gain);
+   gain.connect(ctx.destination);
+   osc.start(start+i*0.13);
+   osc.stop(start+i*0.13+0.18);
+  });
+  setTimeout(()=>ctx.close(),1500);
+ }catch(e){}
+}
+
+window.startCpuGame=()=>{
+ if(cpuTimer)clearTimeout(cpuTimer);
+ hide("gamePanel");
+ hide("cpuFinishedArea");
+ hide("cpuWaitingArea");
+ hide("cpuDefenseArea");
+ hide("cpuAttackArea");
+ show("cpuGamePanel");
+
+ const userTeam=$("cpuUserTeam").value;
+ const difficulty=$("cpuDifficulty").value;
+ const innings=Number($("cpuInnings").value);
+
+ cpuGame={
+  userTeam,
+  difficulty,
+  maxInnings:innings,
+  inning:1,
+  half:"表",
+  outs:0,
+  bases:[false,false,false],
+  scores:{first:0,second:0},
+  hits:{first:0,second:0},
+  atBatNo:1,
+  secret:null,
+  lastResult:null,
+  phase:"setup",
+  finished:false
+ };
+
+ $("cpuDifficultyText").textContent=
+  "CPUの強さ："+({weak:"弱い",normal:"普通",strong:"強い"}[difficulty]);
+ $("cpuTeamText").textContent=
+  "あなた："+teamLabel(userTeam)+" / CPU："+teamLabel(userTeam==="first"?"second":"first");
+
+ $("cpuTeamName1").textContent="先攻";
+ $("cpuTeamName2").textContent="後攻";
+ $("cpuLastResult").textContent="試合開始！";
+ renderCpuGame();
+};
+
+function renderCpuGame(){
+ if(!cpuGame)return;
+
+ $("cpuScore1").textContent=cpuGame.scores.first;
+ $("cpuScore2").textContent=cpuGame.scores.second;
+ $("cpuHits1").textContent=cpuGame.hits.first;
+ $("cpuHits2").textContent=cpuGame.hits.second;
+
+ $("cpuInning").textContent=cpuGame.inning>cpuGame.maxInnings
+  ?"延長"+(cpuGame.inning-cpuGame.maxInnings)+"回"
+  :cpuGame.inning+" / "+cpuGame.maxInnings;
+
+ $("cpuHalf").textContent=cpuGame.half;
+ $("cpuOuts").textContent=cpuGame.outs;
+
+ for(let i=1;i<=3;i++){
+  $("cpuBase"+i).classList.toggle("on",!!cpuGame.bases[i-1]);
+ }
+
+ hide("cpuDefenseArea");
+ hide("cpuAttackArea");
+ hide("cpuWaitingArea");
+ hide("cpuFinishedArea");
+
+ if(cpuGame.finished){
+  show("cpuFinishedArea");
+  const first=cpuGame.scores.first;
+  const second=cpuGame.scores.second;
+  const userScore=cpuGame.scores[cpuGame.userTeam];
+  const cpuTeam=cpuGame.userTeam==="first"?"second":"first";
+  const cpuScore=cpuGame.scores[cpuTeam];
+
+  $("cpuFinalResult").textContent=
+   userScore>cpuScore?"あなたの勝利です！":
+   userScore<cpuScore?"CPUの勝利です。":"引き分けです。";
+  $("cpuTurnInfo").textContent="試合終了";
+  return;
+ }
+
+ const batting=cpuBattingTeam();
+ const userBatting=cpuUserIsBatting();
+
+ $("cpuTurnInfo").textContent=
+  "攻撃："+teamLabel(batting)+
+  " / "+(userBatting?"あなたの攻撃":"CPUの攻撃");
+
+ if(userBatting){
+  show("cpuAttackArea");
+ }else{
+  show("cpuDefenseArea");
+ }
+}
+
+window.cpuSubmitDefense=()=>{
+ if(!cpuGame||cpuGame.finished||cpuUserIsBatting())return;
+
+ const secret=$("cpuDefenseInput").value.trim();
+ if(!/^\d{4}$/.test(secret)){
+  alert("4桁の数字を入力してください。");
+  return;
+ }
+
+ cpuGame.secret=secret;
+ cpuGame.phase="guess";
+ $("cpuDefenseInput").value="";
+ hide("cpuDefenseArea");
+ show("cpuWaitingArea");
+ $("cpuWaitingArea").textContent="CPUが数字を予想しています...";
+
+ renderCpuGame();
+ cpuTimer=setTimeout(()=>{
+  if(!cpuGame||cpuGame.finished||cpuUserIsBatting())return;
+  const guess=cpuGuessNumber(cpuGame.difficulty);
+  cpuResolveAtBat(guess);
+ },900);
+};
+
+window.cpuSubmitGuess=()=>{
+ if(!cpuGame||cpuGame.finished||!cpuUserIsBatting())return;
+
+ const guess=$("cpuGuessInput").value.trim();
+ if(!/^\d{4}$/.test(guess)){
+  alert("4桁の数字を入力してください。");
+  return;
+ }
+
+ $("cpuGuessInput").value="";
+ const secret=cpuRandomNumber(cpuGame.difficulty);
+ cpuResolveAtBat(guess,secret);
+};
+
+function cpuResolveAtBat(guess,secret=null){
+ if(!cpuGame||cpuGame.finished)return;
+
+ if(secret===null)secret=cpuGame.secret;
+ if(!secret)return;
+
+ let hits=0;
+ for(let i=0;i<4;i++){
+  if(secret[i]===guess[i])hits++;
+ }
+
+ const batting=cpuBattingTeam();
+ const defending=cpuDefendingTeam();
+ const labels=["アウト","ヒット","ツーベース","スリーベース","ホームラン"];
+ let runs=0;
+
+ if(hits===0){
+  cpuGame.outs++;
+ }else if(hits===4){
+  runs=1+cpuGame.bases.filter(Boolean).length;
+  cpuGame.bases=[false,false,false];
+ }else{
+  const newBases=[false,false,false];
+
+  for(let i=2;i>=0;i--){
+   if(cpuGame.bases[i]){
+    const destination=i+hits;
+    if(destination>=3)runs++;
+    else newBases[destination]=true;
+   }
+  }
+
+  newBases[hits-1]=true;
+  cpuGame.bases=newBases;
+ }
+
+ if(hits>0)cpuGame.hits[batting]++;
+ if(runs>0)cpuGame.scores[batting]+=runs;
+
+ cpuGame.lastResult={
+  hits,guess,secret,runs,label:labels[hits]
+ };
+
+ $("cpuLastResult").textContent=
+  labels[hits]+"（一致 "+hits+"個）"+
+  " / 予想："+guess+
+  " / 守備側："+secret+
+  " / 得点："+runs;
+
+ cpuPlaySound(hits);
+
+ cpuGame.atBatNo++;
+
+ if(cpuGame.outs>=3){
+  cpuGame.outs=0;
+
+  if(cpuGame.half==="表"){
+   if(
+    cpuGame.inning>=cpuGame.maxInnings&&
+    cpuGame.scores.second>cpuGame.scores.first
+   ){
+    cpuGame.finished=true;
+    renderCpuGame();
+    return;
+   }
+
+   cpuGame.half="裏";
+   cpuGame.bases=cpuGame.inning>cpuGame.maxInnings
+    ?[true,true,false]
+    :[false,false,false];
+   cpuPlayTransition("side");
+  }else{
+   const first=cpuGame.scores.first;
+   const second=cpuGame.scores.second;
+
+   if(cpuGame.inning>=cpuGame.maxInnings){
+    if(first!==second){
+     cpuGame.finished=true;
+     renderCpuGame();
+     return;
+    }
+
+    cpuGame.inning++;
+    cpuGame.half="表";
+    cpuGame.bases=[true,true,false];
+   }else{
+    cpuGame.inning++;
+    cpuGame.half="表";
+    cpuGame.bases=[false,false,false];
+   }
+   cpuPlayTransition("side");
+  }
+ }else{
+  cpuPlayTransition("batter");
+ }
+
+ cpuGame.secret=null;
+ cpuGame.phase="setup";
+
+ renderCpuGame();
+}
+
+window.exitCpuGame=()=>{
+ if(cpuTimer)clearTimeout(cpuTimer);
+ cpuTimer=null;
+ cpuGame=null;
+ hide("cpuGamePanel");
+ show("gamePanel");
+};
+
 $("playerName")?.addEventListener("change",()=>{
  const name=cleanPlayerName($("playerName").value);
  if(name)localStorage.setItem("numberLeaguePlayerName",name);
@@ -1451,4 +1892,3 @@ if("serviceWorker" in navigator){
 </script>
 </body>
 </html>
-
