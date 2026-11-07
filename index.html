@@ -47,7 +47,6 @@ select{cursor:pointer}
 }
 .info strong{display:block;font-size:22px;color:#55d6be}
 .info small{font-size:11px;color:#aab9cc}
-
 /* ダイヤモンド型の塁表示 */
 .bases{
  display:grid;
@@ -76,7 +75,6 @@ select{cursor:pointer}
 #base3{grid-column:1;grid-row:2}
 #base1{grid-column:3;grid-row:2}
 #homeBase{grid-column:2;grid-row:3;border-color:#55d6be}
-
 .result{background:#142235;border:1px solid #344963;border-radius:10px;padding:12px;margin:10px 0;line-height:1.8}
 .secret-number{font-size:25px;letter-spacing:5px;color:#55d6be;font-weight:bold}
 footer{color:#8294aa;font-size:11px;margin-top:25px}
@@ -93,14 +91,12 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 <div class="logo">ONLINE NUMBER BATTLE</div>
 <h1>NUMBER LEAGUE</h1>
 <div class="subtitle">数字で勝負する、新しい野球ゲーム。</div>
-
 <section class="panel">
 <h2>対戦モード</h2>
 <button onclick="selectMode(2)">2人対戦</button>
 <button class="secondary" onclick="selectMode(4)">4人対戦（2対2）</button>
 <div id="mode" class="note">対戦人数を選択してください。</div>
 </section>
-
 <section class="panel">
 <h2>試合設定</h2>
 <label class="setting-label" for="inningsSelect">試合イニング数</label>
@@ -112,7 +108,6 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 </select>
 <div class="note">部屋を作る人がイニング数を決めます。</div>
 </section>
-
 <section class="panel">
 <h2>オンライン対戦</h2>
 <button onclick="createRoom()">部屋を作る</button>
@@ -124,7 +119,6 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 
 <section id="gamePanel" class="panel hidden">
 <h2 id="roleTitle">試合画面</h2>
-
 <div id="roomInfo" class="note">
  <div class="room-code-area">
   <span id="roomCodeText"></span>
@@ -137,7 +131,6 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 <p>プレイヤー2人が参加したら試合を開始できます。</p>
 <button onclick="startGame()">試合開始</button>
 </div>
-
 <div id="gameArea" class="hidden">
 <div class="scoreboard">
  <div class="score">
@@ -151,7 +144,6 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
   <small>得点</small>
  </div>
 </div>
-
 <div class="info-grid">
  <div class="info"><small>イニング</small><strong id="inning">1</strong></div>
  <div class="info"><small>攻守</small><strong id="half">表</strong></div>
@@ -159,7 +151,6 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 </div>
 
 <div id="turnInfo" class="result">試合情報を読み込んでいます。</div>
-
 <div>
  <div class="note">ランナー状況</div>
  <div class="bases">
@@ -171,7 +162,6 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 </div>
 
 <div id="lastResult" class="result">まだ打席はありません。</div>
-
 <div id="defenseArea" class="hidden">
  <h2>ピッチャー：秘密の数字を設定</h2>
  <p class="note">今回の打席で守る4桁の数字を入力してください。</p>
@@ -185,7 +175,6 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
  <input id="guessInput" inputmode="numeric" maxlength="4" placeholder="4桁の数字">
  <button onclick="submitGuess()">予想する</button>
 </div>
-
 <div id="waitingArea" class="note hidden">
 相手の操作を待っています...
 </div>
@@ -205,7 +194,6 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 <div class="note">部屋を作った人が部屋コードを友達に共有してください。</div>
 <footer>NUMBER LEAGUE ONLINE</footer>
 </main>
-
 <script type="module">
 import {initializeApp}
 from "https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js";
@@ -226,7 +214,6 @@ const firebaseConfig={
  messagingSenderId:"1000393139268",
  appId:"1:1000393139268:web:8d49a44ba451295614c811"
 };
-
 const app=initializeApp(firebaseConfig);
 const auth=getAuth(app);
 const database=getDatabase(app);
@@ -244,7 +231,6 @@ const roomRef=()=>ref(database,"rooms/"+currentRoomCode);
 const gameRef=()=>ref(database,"gameStates/"+currentRoomCode);
 
 function status(message){$("status").textContent=message;}
-
 window.selectMode=n=>{
  players=n;
  $("mode").textContent=n===2
@@ -268,7 +254,6 @@ window.copyRoomCode=async()=>{
 
 function show(id){$(id).classList.remove("hidden");}
 function hide(id){$(id).classList.add("hidden");}
-
 function playerIds(room){
  const ids=Object.keys(room?.players||{});
  const host=room?.hostUid;
@@ -289,7 +274,6 @@ function watchRoom(code,role){
  currentRole=role;
  show("gamePanel");
  hide("spectatorArea");
-
  $("roleTitle").textContent=role==="player"?"プレイヤー画面":"観戦者画面";
  $("roomCodeText").textContent="部屋コード："+code;
 
@@ -302,7 +286,6 @@ function watchRoom(code,role){
   const roomInnings=Number(currentRoom.innings)||9;
 
   $("roomSettingsText").textContent="試合設定："+roomInnings+"イニング";
-
   status("部屋コード："+code+" / プレイヤー："+count+"人 / 観戦者："+spectators+"人");
 
   if(currentRole==="player"){
@@ -317,7 +300,6 @@ function watchRoom(code,role){
   }
  });
 }
-
 function watchGame(){
  if(gameUnsubscribe)gameUnsubscribe();
  gameUnsubscribe=onValue(gameRef(),snapshot=>{
@@ -340,7 +322,6 @@ function watchGame(){
   }
  });
 }
-
 function renderGame(g){
  const ids=playerIds(currentRoom);
  const first=ids[0],second=ids[1];
@@ -355,7 +336,6 @@ function renderGame(g){
  for(let i=1;i<=3;i++){
   $("base"+i).classList.toggle("on",!!g.bases?.[i-1]);
  }
-
  const me=auth.currentUser?.uid;
  const batter=playerName(g.batterUid,currentRoom);
  const pitcher=playerName(g.pitcherUid,currentRoom);
@@ -372,7 +352,6 @@ function renderGame(g){
  }else{
   $("lastResult").textContent="まだ打席はありません。";
  }
-
  hide("defenseArea");hide("attackArea");hide("waitingArea");hide("finishedArea");
 
  if(g.phase==="finished"){
@@ -389,7 +368,6 @@ function renderGame(g){
  }else{
   show("waitingArea");
  }
-
  if(g.phase==="resolving"){
   $("waitingArea").textContent="打席結果を判定しています...";
  }
@@ -406,7 +384,6 @@ window.startGame=async()=>{
 
  const existing=await get(gameRef());
  if(existing.exists()){status("試合はすでに始まっています。");return;}
-
  const host=ids[0],guest=ids[1];
  const maxInnings=Number(currentRoom.innings)||9;
 
@@ -423,7 +400,6 @@ window.startGame=async()=>{
  await set(gameRef(),initial);
  status(maxInnings+"イニングの試合を開始しました。");
 };
-
 window.submitDefenseNumber=async()=>{
  const user=auth.currentUser;
  const number=$("defenseInput").value.trim();
@@ -434,7 +410,6 @@ window.submitDefenseNumber=async()=>{
  if(!snap.exists())return;
  const game=snap.val();
  if(game.phase!=="setup"||game.pitcherUid!==user.uid)return;
-
  status("数字を設定しています...");
  try{
   const secretRef=ref(database,"atBatSecrets/"+currentRoomCode+"/"+user.uid+"/"+game.atBatId);
@@ -446,7 +421,6 @@ window.submitDefenseNumber=async()=>{
   status("数字設定エラー："+error.code);
  }
 };
-
 window.submitGuess=async()=>{
  const user=auth.currentUser;
  const guess=$("guessInput").value.trim();
@@ -457,7 +431,6 @@ window.submitGuess=async()=>{
  if(!snap.exists())return;
  const game=snap.val();
  if(game.phase!=="guess"||game.batterUid!==user.uid)return;
-
  try{
   await set(gameRef(),{...game,guess,phase:"resolving"});
   $("guessInput").value="";
@@ -501,6 +474,15 @@ function calculateNext(g,hits,secret,guess){
   next.bases=[false,false,false];
 
   if(next.half==="表"){
+   // 最終回の表が終了し、後攻がリードしていれば試合終了
+   if(
+    next.inning>=(Number(next.maxInnings)||9) &&
+    (next.scores[next.guestUid]||0)>(next.scores[next.hostUid]||0)
+   ){
+    next.phase="finished";
+    return next;
+   }
+
    next.half="裏";
    next.batterUid=next.guestUid;
    next.pitcherUid=next.hostUid;
@@ -550,7 +532,6 @@ async function resolveAtBat(g){
   resolvingId=null;
  }
 }
-
 async function watchSpectatorNumbers(room){
  const area=$("spectatorNumbers");
  area.textContent="観戦中です。試合画面を読み込んでいます...";
@@ -564,7 +545,6 @@ async function watchSpectatorNumbers(room){
   area.textContent="試合開始を待っています。";
  }
 }
-
 window.createRoom=async()=>{
  const user=auth.currentUser;
  if(!user){status("ログイン処理中です。");return;}
@@ -577,7 +557,6 @@ window.createRoom=async()=>{
 
  status("部屋を作成しています...");
  const chars="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
  for(let i=0;i<5;i++){
   const random=crypto.getRandomValues(new Uint8Array(8));
   const code=Array.from(random,n=>chars[n%chars.length]).join("");
@@ -604,13 +583,11 @@ window.createRoom=async()=>{
  }
  status("部屋を作成できませんでした。");
 };
-
 window.joinRoom=async()=>{
  const user=auth.currentUser;
  if(!user){status("ログイン処理中です。");return;}
  const code=$("roomCode").value.trim().toUpperCase();
  if(!/^[A-HJ-NP-Z2-9]{8}$/.test(code)){status("8文字の部屋コードを入力してください。");return;}
-
  try{
   const snap=await get(ref(database,"rooms/"+code));
   if(!snap.exists()){status("その部屋は存在しません。");return;}
@@ -626,13 +603,11 @@ window.joinRoom=async()=>{
   status("参加エラー："+error.code);
  }
 };
-
 window.joinAsSpectator=async()=>{
  const user=auth.currentUser;
  if(!user){status("ログイン処理中です。");return;}
  const code=$("roomCode").value.trim().toUpperCase();
  if(!/^[A-HJ-NP-Z2-9]{8}$/.test(code)){status("8文字の部屋コードを入力してください。");return;}
-
  try{
   const snap=await get(ref(database,"rooms/"+code));
   if(!snap.exists()){status("その部屋は存在しません。");return;}
@@ -646,7 +621,6 @@ window.joinAsSpectator=async()=>{
   status("観戦参加エラー："+error.code);
  }
 };
-
 onAuthStateChanged(auth,user=>{
  if(user)status("Firebase接続成功！匿名ログイン済みです。");
 });
