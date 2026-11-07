@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -54,12 +53,12 @@ input,select{
  color:#aab9cc;font-size:13px
 }
 .scoreboard{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:15px 0}
-.score{background:#142235;border:1px solid #344963;border-radius:12px;padding:14px}
-.score strong{display:block;font-size:32px;color:#55d6be}
+.score{background:#142235;border:1px solid #344963;border-radius:12px;padding:18px 10px}
+.score strong{display:block;font-size:48px;color:#55d6be;line-height:1.15}
 .score small{color:#aab9cc}
 .info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
 .info{background:#142235;border-radius:10px;padding:12px 5px}
-.info strong{display:block;font-size:22px;color:#55d6be}
+.info strong{display:block;font-size:28px;color:#55d6be}
 .info small{font-size:11px;color:#aab9cc}
 .bases{
  display:grid;grid-template-columns:55px 55px 55px;
@@ -95,6 +94,12 @@ input,select{
 }
 .chat-message{padding:6px 3px;border-bottom:1px solid #344963;overflow-wrap:anywhere}
 .chat-message small{color:#aab9cc}
+#lastResult{font-size:20px;font-weight:bold;padding:18px 12px;border-color:#55d6be}
+.score-stats{font-size:14px;color:#d5e2ef;margin-top:5px}
+.batting-stats{background:#142235;border:1px solid #344963;border-radius:10px;padding:12px;margin:10px 0;text-align:left}
+.batting-stats h3{font-size:15px;margin:0 0 8px;color:#55d6be}
+.batting-row{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid #344963;font-size:13px}
+.sound-setting{font-size:13px;color:#aab9cc;margin:8px 0}
 footer{color:#8294aa;font-size:11px;margin-top:25px}
 </style>
 </head>
@@ -176,11 +181,13 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
   <small>先攻</small>
   <strong id="score1">0</strong>
   <small>得点</small>
+  <div class="score-stats">安打 <strong id="hits1">0</strong></div>
  </div>
  <div class="score">
   <small>後攻</small>
   <strong id="score2">0</strong>
   <small>得点</small>
+  <div class="score-stats">安打 <strong id="hits2">0</strong></div>
  </div>
 </div>
 
@@ -199,6 +206,8 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
  <div id="homeBase" class="base"><span>ホーム</span></div>
 </div>
 <div id="lastResult" class="result">まだ打席はありません。</div>
+<div id="battingStats" class="batting-stats"><h3>打率・打席成績</h3><div>まだ記録はありません。</div></div>
+<label class="sound-setting"><input id="soundEnabled" type="checkbox" checked style="width:auto;margin-right:6px">効果音 ON</label>
 
 <div id="defenseArea" class="hidden">
 <h2>ピッチャー：秘密の数字</h2>
@@ -258,7 +267,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-database.js";
 
 const firebaseConfig={
- apiKey:"AIzaSyCVzrxC-edfIgeVcNOhhFprhX1DHk2KuFY",
+ apiKey:"YOUR_FIREBASE_API_KEY",
  authDomain:"number-league-7c7e6.firebaseapp.com",
  databaseURL:"https://number-league-7c7e6-default-rtdb.asia-southeast1.firebasedatabase.app",
  projectId:"number-league-7c7e6",
@@ -281,6 +290,29 @@ let gameUnsubscribe=null;
 let chatUnsubscribers=[];
 let resolvingId=null;
 let lastGameWasFinished=false;
+let lastSoundResultId=null;
+let audioContext=null;
+
+function playResultSound(hitCount){
+ if(!$("soundEnabled")?.checked)return;
+ try{
+  const AudioCtx=window.AudioContext||window.webkitAudioContext;
+  if(!AudioCtx)return;
+  audioContext=audioContext||new AudioCtx();
+  if(audioContext.state==="suspended")audioContext.resume();
+  const patterns={0:[220,160],1:[440],2:[440,660],3:[440,660,880],4:[523,659,784,1047]};
+  const notes=patterns[hitCount]||[330],start=audioContext.currentTime;
+  notes.forEach((freq,i)=>{
+   const osc=audioContext.createOscillator(),gain=audioContext.createGain();
+   osc.type=hitCount===0?"triangle":"sine";osc.frequency.value=freq;
+   gain.gain.setValueAtTime(0.0001,start+i*0.12);
+   gain.gain.exponentialRampToValueAtTime(0.16,start+i*0.12+0.02);
+   gain.gain.exponentialRampToValueAtTime(0.0001,start+i*0.12+0.18);
+   osc.connect(gain);gain.connect(audioContext.destination);
+   osc.start(start+i*0.12);osc.stop(start+i*0.12+0.2);
+  });
+ }catch(e){console.warn("効果音を再生できませんでした",e);}
+}
 
 const roomRef=()=>ref(database,"rooms/"+currentRoomCode);
 const gameRef=()=>ref(database,"gameStates/"+currentRoomCode);
@@ -288,8 +320,6 @@ const gameRef=()=>ref(database,"gameStates/"+currentRoomCode);
 function status(s){$("status").textContent=s}
 function show(id){$(id).classList.remove("hidden")}
 function hide(id){$(id).classList.add("hidden")}
-
-function uid(){return auth.currentUser?.uid}
 
 window.selectMode=n=>{
  selectedMode=n;
@@ -620,6 +650,7 @@ window.joinRoom=async()=>{
   }
 
   watchRoom(code,"player");
+  if(existing)await restorePlayerToGame(code);
  }catch(e){
   status("参加エラー："+e.message);
  }
@@ -699,6 +730,8 @@ window.startGame=async()=>{
   maxInnings:Number(currentRoom.innings)||9,
   bases:[false,false,false],
   scores:{first:0,second:0},
+  teamHits:{first:0,second:0},
+  batterStats:{},
   batterTurn:{first:0,second:0},
   batterUid:first[0],
   pitcherUid:second[0],
@@ -724,6 +757,20 @@ function renderGame(g){
 
  $("score1").textContent=g.scores?.first||0;
  $("score2").textContent=g.scores?.second||0;
+ $("hits1").textContent=g.teamHits?.first||0;
+ $("hits2").textContent=g.teamHits?.second||0;
+
+ const statRows=[];
+ for(const team of ["first","second"]){
+  const members=teamPlayers(currentRoom,team);
+  members.forEach((id,index)=>{
+   const st=g.batterStats?.[id]||{atBats:0,hits:0};
+   const avg=st.atBats?(st.hits/st.atBats).toFixed(3).replace(/^0/,""):"---";
+   statRows.push('<div class="batting-row"><span>'+teamLabel(team)+' '+(index+1)+'</span><strong>'+avg+'（'+st.hits+'安打/'+st.atBats+'打数）</strong></div>');
+  });
+ }
+ $("battingStats").innerHTML="<h3>打率・打席成績</h3>"+(statRows.join("")||"<div>まだ記録はありません。</div>");
+
  $("inning").textContent=g.inning+" / "+g.maxInnings;
  $("half").textContent=g.half;
  $("outs").textContent=g.outs;
@@ -736,7 +783,14 @@ function renderGame(g){
   "バッター："+displayName(g.batterUid)+
   " / ピッチャー："+displayName(g.pitcherUid);
 
+ if(!g.lastResult&&lastSoundResultId===null)lastSoundResultId=g.atBatId;
  if(g.lastResult){
+  const resultId=g.lastResult.id||g.atBatId;
+  if(lastSoundResultId===null)lastSoundResultId=resultId;
+  else if(lastSoundResultId!==resultId){
+   lastSoundResultId=resultId;
+   playResultSound(g.lastResult.hits);
+  }
   $("lastResult").textContent=
    g.lastResult.label+"（一致 "+g.lastResult.hits+"個）"+
    " / 予想："+g.lastResult.guess+
@@ -809,7 +863,6 @@ window.submitDefenseNumber=async()=>{
  const snap=await get(gameRef());
  if(!snap.exists())return;
  const g=snap.val();
-
  if(g.phase!=="setup"||g.pitcherUid!==uid())return;
 
  try{
@@ -862,7 +915,9 @@ function calculateNext(g,hits,secret,guess){
   ...g,
   bases:[...(g.bases||[false,false,false])],
   scores:{...g.scores},
-  batterTurn:{...g.batterTurn}
+  batterTurn:{...g.batterTurn},
+  teamHits:{...(g.teamHits||{first:0,second:0})},
+  batterStats:{...(g.batterStats||{})}
  };
 
  const batting=battingTeam(g);
@@ -872,6 +927,13 @@ function calculateNext(g,hits,secret,guess){
  let runs=0;
 
  next.batterTurn[batting]=(next.batterTurn[batting]||0)+1;
+ const batterStat={...(next.batterStats[batter]||{atBats:0,hits:0})};
+ batterStat.atBats++;
+ if(hits>0){
+  batterStat.hits++;
+  next.teamHits[batting]=(next.teamHits[batting]||0)+1;
+ }
+ next.batterStats[batter]=batterStat;
 
  if(hits===0){
   next.outs++;
@@ -899,6 +961,7 @@ function calculateNext(g,hits,secret,guess){
 
  next.lastResult={
   hits,
+  id:g.atBatId+"-result",
   label:labels[hits],
   secret,
   guess,
@@ -1019,49 +1082,83 @@ window.switchPitcher=async()=>{
 window.leaveGame=async()=>{
  if(isSpectator())return;
  if(!confirm("一時退出しますか？"))return;
-
  try{
   await update(ref(database,"rooms/"+currentRoomCode+"/players/"+uid()),{
-   active:false,
-   ready:false
+   active:false,ready:false
   });
 
-  const snap=await get(gameRef());
-  if(snap.exists()){
-   const g=snap.val();
-   const team=defendingTeam(g);
+  const [roomSnap,gameSnap]=await Promise.all([get(roomRef()),get(gameRef())]);
+  const latestRoom=roomSnap.val(),g=gameSnap.val();
+
+  if(g&&latestRoom){
+   const myTeam=latestRoom.players?.[uid()]?.team;
+   const remaining=(myTeam?teamPlayers(latestRoom,myTeam,true):[]).filter(id=>id!==uid());
+   const changes={};
 
    if(g.pitcherUid===uid()){
-    const remaining=activeTeam(currentRoom,team).filter(id=>id!==uid());
-    await update(gameRef(),{
-     pitcherUid:remaining[0]||null,
-     ["pitchers/"+team]:remaining[0]||null,
-     phase:g.phase==="guess"?"setup":g.phase,
-     guess:null,
-     atBatId:g.inning+"-"+g.half+"-"+g.atBatNo+"-"+Date.now()
-    });
+    const defense=defendingTeam(g);
+    changes.pitcherUid=remaining[0]||null;
+    changes["pitchers/"+defense]=remaining[0]||null;
+    if(g.phase==="guess"){
+     changes.phase="setup";
+     changes.guess=null;
+     changes.atBatId=g.inning+"-"+g.half+"-"+g.atBatNo+"-"+Date.now();
+    }
    }
 
-   if(g.batterUid===uid()){
-    const batting=battingTeam(g);
-    const remaining=activeTeam(currentRoom,batting).filter(id=>id!==uid());
-    await update(gameRef(),{
-     batterUid:remaining[0]||null
-    });
-   }
+   if(g.batterUid===uid())changes.batterUid=remaining[0]||null;
+   if(Object.keys(changes).length)await update(gameRef(),changes);
   }
 
-  status("一時退出しました。");
+  status("一時退出しました。部屋コードから再参加できます。");
  }catch(e){
   status("退出エラー："+e.message);
  }
 };
+
+async function restorePlayerToGame(code){
+ const [roomSnap,gameSnap]=await Promise.all([
+  get(ref(database,"rooms/"+code)),
+  get(ref(database,"gameStates/"+code))
+ ]);
+
+ if(!roomSnap.exists()||!gameSnap.exists())return;
+
+ const room=roomSnap.val();
+ const g=gameSnap.val();
+ const me=uid();
+ const player=room.players?.[me];
+
+ if(!player?.team||g.phase==="finished"||g.phase==="resolving")return;
+
+ const team=player.team;
+ const batting=battingTeam(g);
+ const defending=defendingTeam(g);
+ const changes={};
+
+ if(team===defending&&!g.pitcherUid){
+  changes.pitcherUid=me;
+  changes["pitchers/"+defending]=me;
+  if(g.phase==="guess"){
+   changes.phase="setup";
+   changes.guess=null;
+   changes.atBatId=g.inning+"-"+g.half+"-"+g.atBatNo+"-"+Date.now();
+  }
+ }
+
+ if(team===batting&&!g.batterUid)changes.batterUid=me;
+
+ if(Object.keys(changes).length){
+  await update(ref(database,"gameStates/"+code),changes);
+ }
+}
 
 window.rejoinGame=async()=>{
  try{
   await update(ref(database,"rooms/"+currentRoomCode+"/players/"+uid()),{
    active:true
   });
+  await restorePlayerToGame(currentRoomCode);
   status("ゲームに復帰しました。");
  }catch(e){
   status("復帰エラー："+e.message);
@@ -1090,6 +1187,8 @@ window.startRematch=async()=>{
   maxInnings:Number(currentRoom.innings)||9,
   bases:[false,false,false],
   scores:{first:0,second:0},
+  teamHits:{first:0,second:0},
+  batterStats:{},
   batterTurn:{first:0,second:0},
   batterUid:first[0],
   pitcherUid:second[0],
@@ -1136,14 +1235,13 @@ function watchChat(){
     list.innerHTML="";
     for(const t of ["first","second"]){
      if(!teams.includes(t))continue;
-     const source=messages;
      if(t!==team)continue;
 
      for(const [id,m] of entries){
       const div=document.createElement("div");
       div.className="chat-message";
       const label=document.createElement("small");
-      label.textContent=teamLabel(team)+" / "+(m.uid===uid()?"自分": "プレイヤー");
+      label.textContent=teamLabel(team)+" / "+(m.uid===uid()?"自分":"プレイヤー");
       const body=document.createElement("div");
       body.textContent=m.text||"";
       div.append(label,body);
@@ -1161,7 +1259,6 @@ window.sendChat=async()=>{
  const text=$("chatInput").value.trim();
  if(!text||!currentRoom)return;
 
- let teams=[];
  if(isSpectator()){
   status("観戦者はチャットを送信できません。");
   return;
@@ -1202,14 +1299,15 @@ onAuthStateChanged(auth,user=>{
 signInAnonymously(auth).catch(e=>{
  status("接続エラー："+e.message);
 });
+</script>
 
-// PWA: ホーム画面からアプリ形式で起動するための登録
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(error => {
-      console.error("Service Worker registration failed:", error);
-    });
-  });
+<script>
+if("serviceWorker" in navigator){
+ window.addEventListener("load",()=>{
+  navigator.serviceWorker.register("./sw.js").catch(err=>
+   console.warn("Service Worker:",err)
+  );
+ });
 }
 </script>
 </body>
