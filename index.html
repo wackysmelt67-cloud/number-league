@@ -95,9 +95,60 @@ input,select{
 .chat-message{padding:6px 3px;border-bottom:1px solid #344963;overflow-wrap:anywhere}
 #lastResult{font-size:20px;font-weight:bold;padding:18px 12px;border-color:#55d6be}
 .score-stats{font-size:14px;color:#d5e2ef;margin-top:5px}
-.batting-stats{background:#142235;border:1px solid #344963;border-radius:10px;padding:12px;margin:10px 0;text-align:left}
+.batting-stats{
+ background:#142235;border:1px solid #344963;
+ border-radius:10px;padding:12px;margin:10px 0;text-align:left
+}
 .batting-stats h3{font-size:15px;margin:0 0 8px;color:#55d6be}
-.batting-row{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid #344963;font-size:13px}
+.batting-row{
+ display:flex;justify-content:space-between;gap:8px;
+ padding:5px 0;border-bottom:1px solid #344963;font-size:13px
+}
+.number-usage{
+ background:#142235;border:1px solid #344963;
+ border-radius:10px;padding:12px;margin:10px 0;text-align:left
+}
+.number-usage h3{
+ font-size:15px;color:#55d6be;margin:0 0 10px
+}
+.number-player{
+ border-top:1px solid #344963;
+ padding:12px 0
+}
+.number-player-name{
+ color:#55d6be;font-weight:bold;margin-bottom:10px
+}
+.number-section-title{
+ font-size:13px;font-weight:bold;margin:12px 0 8px
+}
+.number-ranking-row{
+ display:flex;justify-content:space-between;
+ gap:8px;padding:5px 0;font-size:13px
+}
+.number-ranking-row strong{white-space:nowrap}
+.number-bar{
+ height:7px;background:#344963;
+ border-radius:10px;overflow:hidden;margin:3px 0 8px
+}
+.number-bar-fill{
+ height:100%;background:#35c9ad;border-radius:10px
+}
+.number-digit-grid{
+ display:grid;grid-template-columns:repeat(2,1fr);
+ gap:5px 12px
+}
+.number-digit-cell{
+ background:#202f43;border-radius:8px;padding:7px
+}
+.number-digit-cell .number-ranking-row{
+ font-size:12px;padding:2px 0
+}
+.number-digit-rate{
+ font-size:11px;color:#aab9cc;text-align:right
+}
+.number-total{
+ color:#aab9cc;font-size:11px;margin-top:10px;line-height:1.8
+}
 .sound-setting{font-size:13px;color:#aab9cc;margin:8px 0}
 footer{color:#8294aa;font-size:11px;margin-top:25px}
 </style>
@@ -116,7 +167,6 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 <div id="modeText" class="note">対戦形式を選択してください。</div>
 </section>
 
-<!-- CPU対戦設定 -->
 <section class="panel">
 <h2>CPU対戦</h2>
 <div class="note">1人でCPUチームと対戦できます。</div>
@@ -177,7 +227,6 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 <div id="status" class="status">Firebaseに接続しています...</div>
 </section>
 
-<!-- CPU試合画面 -->
 <section id="cpuGamePanel" class="panel hidden">
 <h2>CPU対戦画面</h2>
 
@@ -311,6 +360,12 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 </div>
 <div id="lastResult" class="result">まだ打席はありません。</div>
 <div id="battingStats" class="batting-stats"><h3>打率・打席成績</h3><div>まだ記録はありません。</div></div>
+
+<div id="numberUsageStats" class="number-usage">
+ <h3>投手別・数字の使用率</h3>
+ <div>まだ記録はありません。</div>
+</div>
+
 <label class="sound-setting"><input id="soundEnabled" type="checkbox" checked style="width:auto;margin-right:6px">効果音 ON</label>
 
 <div id="defenseArea" class="hidden">
@@ -927,6 +982,7 @@ window.startGame=async()=>{
   scores:{first:0,second:0},
   teamHits:{first:0,second:0},
   batterStats:{},
+  numberUsage:{},
   batterTurn:{first:0,second:0},
   batterUid:first[0],
   pitcherUid:second[0],
@@ -944,6 +1000,138 @@ window.startGame=async()=>{
 
 function battingTeam(g){return g.half==="表"?"first":"second"}
 function defendingTeam(g){return g.half==="表"?"second":"first"}
+
+/* 投手別・数字使用率の表示 */
+function renderNumberUsage(g){
+ const area=$("numberUsageStats");
+ if(!area)return;
+
+ area.innerHTML="";
+
+ const title=document.createElement("h3");
+ title.textContent="投手別・数字の使用率";
+ area.appendChild(title);
+
+ const allUsage=g.numberUsage||{};
+ const pitcherIds=Object.keys(allUsage);
+
+ if(!pitcherIds.length){
+  const empty=document.createElement("div");
+  empty.textContent="まだ記録はありません。";
+  area.appendChild(empty);
+  return;
+ }
+
+ for(const pitcherId of pitcherIds){
+  const usage=allUsage[pitcherId]||{};
+  const total=Number(usage.totalPitches)||0;
+  const digitTotal=total*4;
+
+  const section=document.createElement("div");
+  section.className="number-player";
+
+  const name=document.createElement("div");
+  name.className="number-player-name";
+  name.textContent="投手："+displayName(pitcherId);
+  section.appendChild(name);
+
+  const fourTitle=document.createElement("div");
+  fourTitle.className="number-section-title";
+  fourTitle.textContent="4桁の数字 使用率 TOP3";
+  section.appendChild(fourTitle);
+
+  const fourEntries=Object.entries(usage.fourDigit||{})
+   .sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]))
+   .slice(0,3);
+
+  if(!fourEntries.length){
+   const empty=document.createElement("div");
+   empty.textContent="記録なし";
+   section.appendChild(empty);
+  }
+
+  fourEntries.forEach(([number,count],index)=>{
+   const rate=total?count/total*100:0;
+
+   const row=document.createElement("div");
+   row.className="number-ranking-row";
+
+   const left=document.createElement("span");
+   left.textContent=(index+1)+"位　"+number;
+
+   const right=document.createElement("strong");
+   right.textContent=count+"回 / "+rate.toFixed(1)+"%";
+
+   row.append(left,right);
+   section.appendChild(row);
+
+   const bar=document.createElement("div");
+   bar.className="number-bar";
+
+   const fill=document.createElement("div");
+   fill.className="number-bar-fill";
+   fill.style.width=Math.min(rate,100)+"%";
+
+   bar.appendChild(fill);
+   section.appendChild(bar);
+  });
+
+  const digitTitle=document.createElement("div");
+  digitTitle.className="number-section-title";
+  digitTitle.textContent="単体の数字 使用率（0〜9）";
+  section.appendChild(digitTitle);
+
+  const grid=document.createElement("div");
+  grid.className="number-digit-grid";
+
+  const digitCounts=usage.singleDigits||{};
+
+  const digitEntries=Array.from({length:10},(_,i)=>String(i))
+   .map(digit=>({
+    digit,
+    count:Number(digitCounts[digit])||0
+   }))
+   .sort((a,b)=>b.count-a.count||
+    Number(a.digit)-Number(b.digit));
+
+  digitEntries.forEach((item,index)=>{
+   const rate=digitTotal
+    ?item.count/digitTotal*100
+    :0;
+
+   const cell=document.createElement("div");
+   cell.className="number-digit-cell";
+
+   const row=document.createElement("div");
+   row.className="number-ranking-row";
+
+   const left=document.createElement("span");
+   left.textContent=(index+1)+"位　"+item.digit;
+
+   const right=document.createElement("strong");
+   right.textContent=item.count+"回";
+
+   row.append(left,right);
+
+   const percentage=document.createElement("div");
+   percentage.className="number-digit-rate";
+   percentage.textContent=rate.toFixed(1)+"%";
+
+   cell.append(row,percentage);
+   grid.appendChild(cell);
+  });
+
+  section.appendChild(grid);
+
+  const totalText=document.createElement("div");
+  totalText.className="number-total";
+  totalText.textContent=
+   "投球数："+total+"回 / 集計桁数："+digitTotal+"桁";
+
+  section.appendChild(totalText);
+  area.appendChild(section);
+ }
+}
 
 function renderGame(g){
  const me=uid();
@@ -982,6 +1170,9 @@ function renderGame(g){
   });
  }
  $("battingStats").innerHTML="<h3>打率・打席成績</h3>"+(statRows.join("")||"<div>まだ記録はありません。</div>");
+
+ /* 数字使用率を更新 */
+ renderNumberUsage(g);
 
  $("inning").textContent=g.inning>g.maxInnings
   ?"延長"+(g.inning-g.maxInnings)+"回"
@@ -1130,7 +1321,8 @@ function calculateNext(g,hits,secret,guess){
   scores:{...g.scores},
   batterTurn:{...g.batterTurn},
   teamHits:{...(g.teamHits||{first:0,second:0})},
-  batterStats:{...(g.batterStats||{})}
+  batterStats:{...(g.batterStats||{})},
+  numberUsage:{...(g.numberUsage||{})}
  };
 
  const batting=battingTeam(g);
@@ -1147,6 +1339,31 @@ function calculateNext(g,hits,secret,guess){
   next.teamHits[batting]=(next.teamHits[batting]||0)+1;
  }
  next.batterStats[batter]=batterStat;
+
+ /* 投手別の秘密の数字の使用回数を集計 */
+ const pitcher=g.pitcherUid;
+ const secretNumber=String(secret).padStart(4,"0");
+
+ const previousUsage=next.numberUsage[pitcher]||{};
+ const usage={
+  totalPitches:Number(previousUsage.totalPitches)||0,
+  fourDigit:{...(previousUsage.fourDigit||{})},
+  singleDigits:{...(previousUsage.singleDigits||{})}
+ };
+
+ usage.totalPitches++;
+
+ /* 4桁の数字そのものの使用回数 */
+ usage.fourDigit[secretNumber]=
+  (Number(usage.fourDigit[secretNumber])||0)+1;
+
+ /* 4桁それぞれの数字の使用回数 */
+ for(const digit of secretNumber){
+  usage.singleDigits[digit]=
+   (Number(usage.singleDigits[digit])||0)+1;
+ }
+
+ next.numberUsage[pitcher]=usage;
 
  if(hits===0){
   next.outs++;
@@ -1416,6 +1633,7 @@ window.startRematch=async()=>{
   scores:{first:0,second:0},
   teamHits:{first:0,second:0},
   batterStats:{},
+  numberUsage:{},
   batterTurn:{first:0,second:0},
   batterUid:first[0],
   pitcherUid:second[0],
