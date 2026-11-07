@@ -23,14 +23,15 @@ h1{font-size:36px;margin:12px 0 5px}
  border-radius:18px;padding:20px;margin-top:20px
 }
 h2{font-size:18px;margin:0 0 15px}
-button,input{
+button,input,select{
  width:100%;padding:14px;border-radius:10px;
  font-size:16px;margin:6px 0
 }
 button{border:0;background:#35c9ad;color:#102b35;font-weight:bold;cursor:pointer}
 button.secondary{background:#344963;color:white}
-button:disabled,input:disabled{opacity:.5}
-input{background:#142235;border:1px solid #52677f;color:white;text-align:center}
+button:disabled,input:disabled,select:disabled{opacity:.5}
+input,select{background:#142235;border:1px solid #52677f;color:white;text-align:center}
+select{cursor:pointer}
 .status{margin-top:12px;padding:12px;border-radius:9px;background:#142235;color:#f4d58b;font-size:13px;overflow-wrap:anywhere}
 .hidden{display:none!important}
 .scoreboard{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:15px 0}
@@ -58,20 +59,14 @@ input{background:#142235;border:1px solid #52677f;color:white;text-align:center}
  gap:5px;
 }
 .base{
- width:38px;
- height:38px;
+ width:38px;height:38px;
  border:2px solid #8294aa;
  transform:rotate(45deg);
  border-radius:5px;
- display:flex;
- align-items:center;
- justify-content:center;
+ display:flex;align-items:center;justify-content:center;
  justify-self:center;
 }
-.base span{
- transform:rotate(-45deg);
- font-size:10px;
-}
+.base span{transform:rotate(-45deg);font-size:10px}
 .base.on{
  background:#f4d58b;
  border-color:#f4d58b;
@@ -80,26 +75,17 @@ input{background:#142235;border:1px solid #52677f;color:white;text-align:center}
 #base2{grid-column:2;grid-row:1}
 #base3{grid-column:1;grid-row:2}
 #base1{grid-column:3;grid-row:2}
-#homeBase{
- grid-column:2;
- grid-row:3;
- border-color:#55d6be;
-}
+#homeBase{grid-column:2;grid-row:3;border-color:#55d6be}
 
 .result{background:#142235;border:1px solid #344963;border-radius:10px;padding:12px;margin:10px 0;line-height:1.8}
 .secret-number{font-size:25px;letter-spacing:5px;color:#55d6be;font-weight:bold}
 footer{color:#8294aa;font-size:11px;margin-top:25px}
 .room-code-area{
- display:flex;
- flex-direction:column;
- align-items:center;
- gap:4px;
+ display:flex;flex-direction:column;
+ align-items:center;gap:4px;
 }
-.room-code-area button{
- max-width:220px;
- padding:10px;
- font-size:14px;
-}
+.room-code-area button{max-width:220px;padding:10px;font-size:14px}
+.setting-label{display:block;text-align:left;margin-top:12px;color:#aab9cc;font-size:13px}
 </style>
 </head>
 <body>
@@ -113,6 +99,18 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 <button onclick="selectMode(2)">2人対戦</button>
 <button class="secondary" onclick="selectMode(4)">4人対戦（2対2）</button>
 <div id="mode" class="note">対戦人数を選択してください。</div>
+</section>
+
+<section class="panel">
+<h2>試合設定</h2>
+<label class="setting-label" for="inningsSelect">試合イニング数</label>
+<select id="inningsSelect">
+ <option value="3">3イニング</option>
+ <option value="5">5イニング</option>
+ <option value="7">7イニング</option>
+ <option value="9" selected>9イニング</option>
+</select>
+<div class="note">部屋を作る人がイニング数を決めます。</div>
 </section>
 
 <section class="panel">
@@ -131,6 +129,7 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
  <div class="room-code-area">
   <span id="roomCodeText"></span>
   <button class="secondary" onclick="copyRoomCode()">部屋番号をコピー</button>
+  <span id="roomSettingsText"></span>
  </div>
 </div>
 
@@ -259,7 +258,6 @@ window.copyRoomCode=async()=>{
   status("コピーする部屋番号がありません。");
   return;
  }
-
  try{
   await navigator.clipboard.writeText(code);
   status("部屋番号 "+code+" をコピーしました！");
@@ -301,6 +299,10 @@ function watchRoom(code,role){
 
   const count=Object.keys(currentRoom.players||{}).length;
   const spectators=Object.keys(currentRoom.spectators||{}).length;
+  const roomInnings=Number(currentRoom.innings)||9;
+
+  $("roomSettingsText").textContent="試合設定："+roomInnings+"イニング";
+
   status("部屋コード："+code+" / プレイヤー："+count+"人 / 観戦者："+spectators+"人");
 
   if(currentRole==="player"){
@@ -346,7 +348,7 @@ function renderGame(g){
  $("name2").textContent=playerName(second,currentRoom);
  $("score1").textContent=g.scores?.[first]||0;
  $("score2").textContent=g.scores?.[second]||0;
- $("inning").textContent=g.inning;
+ $("inning").textContent=g.inning+" / "+(g.maxInnings||9);
  $("half").textContent=g.half;
  $("outs").textContent=g.outs;
 
@@ -406,9 +408,12 @@ window.startGame=async()=>{
  if(existing.exists()){status("試合はすでに始まっています。");return;}
 
  const host=ids[0],guest=ids[1];
+ const maxInnings=Number(currentRoom.innings)||9;
+
  const initial={
   hostUid:host,guestUid:guest,
   inning:1,half:"表",outs:0,
+  maxInnings:maxInnings,
   bases:[false,false,false],
   scores:{[host]:0,[guest]:0},
   batterUid:host,pitcherUid:guest,
@@ -416,7 +421,7 @@ window.startGame=async()=>{
   guess:null,lastResult:null,gameOver:false
  };
  await set(gameRef(),initial);
- status("試合を開始しました。");
+ status(maxInnings+"イニングの試合を開始しました。");
 };
 
 window.submitDefenseNumber=async()=>{
@@ -500,7 +505,7 @@ function calculateNext(g,hits,secret,guess){
    next.batterUid=next.guestUid;
    next.pitcherUid=next.hostUid;
   }else{
-   if(next.inning>=9){
+   if(next.inning>=(Number(next.maxInnings)||9)){
     next.phase="finished";
     return next;
    }
@@ -563,6 +568,13 @@ async function watchSpectatorNumbers(room){
 window.createRoom=async()=>{
  const user=auth.currentUser;
  if(!user){status("ログイン処理中です。");return;}
+
+ const innings=Number($("inningsSelect").value);
+ if(![3,5,7,9].includes(innings)){
+  status("イニング数を選択してください。");
+  return;
+ }
+
  status("部屋を作成しています...");
  const chars="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
@@ -570,17 +582,25 @@ window.createRoom=async()=>{
   const random=crypto.getRandomValues(new Uint8Array(8));
   const code=Array.from(random,n=>chars[n%chars.length]).join("");
   const data={
-   hostUid:user.uid,mode:players,maxPlayers:players,
-   createdAt:Date.now(),players:{[user.uid]:{joinedAt:Date.now()}}
+   hostUid:user.uid,
+   mode:players,
+   maxPlayers:players,
+   innings:innings,
+   createdAt:Date.now(),
+   players:{[user.uid]:{joinedAt:Date.now()}}
   };
   try{
    const result=await runTransaction(ref(database,"rooms/"+code),current=>current===null?data:undefined);
    if(result.committed){
     $("roomCode").value=code;
     watchRoom(code,"player");
+    status(innings+"イニングの部屋を作成しました。");
     return;
    }
-  }catch(error){status("部屋作成エラー："+error.code);return;}
+  }catch(error){
+   status("部屋作成エラー："+error.code);
+   return;
+  }
  }
  status("部屋を作成できませんでした。");
 };
@@ -602,7 +622,9 @@ window.joinRoom=async()=>{
    await set(ref(database,"rooms/"+code+"/players/"+user.uid),{joinedAt:Date.now()});
   }
   watchRoom(code,"player");
- }catch(error){status("参加エラー："+error.code);}
+ }catch(error){
+  status("参加エラー："+error.code);
+ }
 };
 
 window.joinAsSpectator=async()=>{
@@ -620,7 +642,9 @@ window.joinAsSpectator=async()=>{
    await set(ref(database,"rooms/"+code+"/spectators/"+user.uid),{joinedAt:Date.now()});
   }
   watchRoom(code,"spectator");
- }catch(error){status("観戦参加エラー："+error.code);}
+ }catch(error){
+  status("観戦参加エラー："+error.code);
+ }
 };
 
 onAuthStateChanged(auth,user=>{
