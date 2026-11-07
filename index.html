@@ -46,17 +46,60 @@ input{background:#142235;border:1px solid #52677f;color:white;text-align:center}
 }
 .info strong{display:block;font-size:22px;color:#55d6be}
 .info small{font-size:11px;color:#aab9cc}
-.bases{display:flex;justify-content:center;align-items:center;margin:18px auto;gap:12px}
-.base{
- width:43px;height:43px;border:2px solid #8294aa;
- transform:rotate(45deg);border-radius:5px;
- display:flex;align-items:center;justify-content:center
+
+/* ダイヤモンド型の塁表示 */
+.bases{
+ display:grid;
+ grid-template-columns:55px 55px 55px;
+ grid-template-rows:55px 55px 55px;
+ justify-content:center;
+ align-items:center;
+ margin:18px auto;
+ gap:5px;
 }
-.base span{transform:rotate(-45deg);font-size:10px}
-.base.on{background:#f4d58b;border-color:#f4d58b;color:#142235}
+.base{
+ width:38px;
+ height:38px;
+ border:2px solid #8294aa;
+ transform:rotate(45deg);
+ border-radius:5px;
+ display:flex;
+ align-items:center;
+ justify-content:center;
+ justify-self:center;
+}
+.base span{
+ transform:rotate(-45deg);
+ font-size:10px;
+}
+.base.on{
+ background:#f4d58b;
+ border-color:#f4d58b;
+ color:#142235;
+}
+#base2{grid-column:2;grid-row:1}
+#base3{grid-column:1;grid-row:2}
+#base1{grid-column:3;grid-row:2}
+#homeBase{
+ grid-column:2;
+ grid-row:3;
+ border-color:#55d6be;
+}
+
 .result{background:#142235;border:1px solid #344963;border-radius:10px;padding:12px;margin:10px 0;line-height:1.8}
 .secret-number{font-size:25px;letter-spacing:5px;color:#55d6be;font-weight:bold}
 footer{color:#8294aa;font-size:11px;margin-top:25px}
+.room-code-area{
+ display:flex;
+ flex-direction:column;
+ align-items:center;
+ gap:4px;
+}
+.room-code-area button{
+ max-width:220px;
+ padding:10px;
+ font-size:14px;
+}
 </style>
 </head>
 <body>
@@ -83,7 +126,13 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 
 <section id="gamePanel" class="panel hidden">
 <h2 id="roleTitle">試合画面</h2>
-<div id="roomInfo" class="note"></div>
+
+<div id="roomInfo" class="note">
+ <div class="room-code-area">
+  <span id="roomCodeText"></span>
+  <button class="secondary" onclick="copyRoomCode()">部屋番号をコピー</button>
+ </div>
+</div>
 
 <div id="startArea" class="hidden">
 <p>プレイヤー2人が参加したら試合を開始できます。</p>
@@ -118,20 +167,21 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
   <div id="base2" class="base"><span>2塁</span></div>
   <div id="base3" class="base"><span>3塁</span></div>
   <div id="base1" class="base"><span>1塁</span></div>
+  <div id="homeBase" class="base"><span>ホーム</span></div>
  </div>
 </div>
 
 <div id="lastResult" class="result">まだ打席はありません。</div>
 
 <div id="defenseArea" class="hidden">
- <h2>守備側：秘密の数字を設定</h2>
+ <h2>ピッチャー：秘密の数字を設定</h2>
  <p class="note">今回の打席で守る4桁の数字を入力してください。</p>
  <input id="defenseInput" inputmode="numeric" maxlength="4" placeholder="例：0123">
  <button onclick="submitDefenseNumber()">数字を設定する</button>
 </div>
 
 <div id="attackArea" class="hidden">
- <h2>攻撃側：数字を予想</h2>
+ <h2>バッター：数字を予想</h2>
  <p class="note">予想できるのは1回だけです。</p>
  <input id="guessInput" inputmode="numeric" maxlength="4" placeholder="4桁の数字">
  <button onclick="submitGuess()">予想する</button>
@@ -203,6 +253,21 @@ window.selectMode=n=>{
   :"4人対戦（2対2）を選択しました。";
 };
 
+window.copyRoomCode=async()=>{
+ const code=currentRoomCode;
+ if(!code){
+  status("コピーする部屋番号がありません。");
+  return;
+ }
+
+ try{
+  await navigator.clipboard.writeText(code);
+  status("部屋番号 "+code+" をコピーしました！");
+ }catch(error){
+  status("コピーできませんでした。部屋番号を手動でコピーしてください。");
+ }
+};
+
 function show(id){$(id).classList.remove("hidden");}
 function hide(id){$(id).classList.add("hidden");}
 
@@ -228,7 +293,7 @@ function watchRoom(code,role){
  hide("spectatorArea");
 
  $("roleTitle").textContent=role==="player"?"プレイヤー画面":"観戦者画面";
- $("roomInfo").textContent="部屋コード："+code;
+ $("roomCodeText").textContent="部屋コード："+code;
 
  roomUnsubscribe=onValue(roomRef(),snapshot=>{
   currentRoom=snapshot.val();
@@ -294,14 +359,14 @@ function renderGame(g){
  const pitcher=playerName(g.pitcherUid,currentRoom);
 
  $("turnInfo").textContent=
-  "攻撃："+batter+" / 守備："+pitcher;
+  "バッター："+batter+" / ピッチャー："+pitcher;
 
  if(g.lastResult){
   $("lastResult").textContent=
    "前の打席："+g.lastResult.label+
    "（一致 "+g.lastResult.hits+"個）"+
-   " / 予想："+g.lastResult.guess+
-   " / 正解："+g.lastResult.secret;
+   " / バッターの予想："+g.lastResult.guess+
+   " / ピッチャーの数字："+g.lastResult.secret;
  }else{
   $("lastResult").textContent="まだ打席はありません。";
  }
@@ -565,4 +630,3 @@ signInAnonymously(auth).catch(error=>status("接続エラー："+error.code));
 </script>
 </body>
 </html>
-F
