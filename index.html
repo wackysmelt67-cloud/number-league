@@ -60,23 +60,42 @@ input,select{
 .info{background:#142235;border-radius:10px;padding:12px 5px}
 .info strong{display:block;font-size:28px;color:#55d6be}
 .info small{font-size:11px;color:#aab9cc}
+
+/* 塁のひし形表示 */
 .bases{
- display:grid;grid-template-columns:55px 55px 55px;
- grid-template-rows:55px 55px 55px;
- justify-content:center;align-items:center;margin:18px auto;gap:5px
+ display:grid;
+ grid-template-columns:65px 65px 65px;
+ grid-template-rows:65px 65px 65px;
+ justify-content:center;
+ align-items:center;
+ margin:22px auto;
+ gap:2px
 }
 .base{
- width:38px;height:38px;border:2px solid #8294aa;
- transform:rotate(45deg);border-radius:5px;
- display:flex;align-items:center;justify-content:center;
- justify-self:center
+ width:40px;height:40px;
+ border:2px solid #8294aa;
+ transform:rotate(45deg);
+ border-radius:5px;
+ display:flex;
+ align-items:center;
+ justify-content:center;
+ justify-self:center;
+ background:#202f43
 }
-.base span{transform:rotate(-45deg);font-size:10px}
-.base.on{background:#f4d58b;border-color:#f4d58b;color:#142235}
-#base2{grid-column:2;grid-row:1}
-#base3{grid-column:1;grid-row:2}
-#base1{grid-column:3;grid-row:2}
+.base span{
+ transform:rotate(-45deg);
+ font-size:10px
+}
+.base.on{
+ background:#f4d58b;
+ border-color:#f4d58b;
+ color:#142235
+}
+#base2,#cpuBase2{grid-column:2;grid-row:1}
+#base3,#cpuBase3{grid-column:1;grid-row:2}
+#base1,#cpuBase1{grid-column:3;grid-row:2}
 #homeBase{grid-column:2;grid-row:3;border-color:#55d6be}
+
 .result{
  background:#142235;border:1px solid #344963;
  border-radius:10px;padding:12px;margin:10px 0;line-height:1.8
@@ -106,8 +125,10 @@ input,select{
  display:flex;justify-content:space-between;gap:8px;
  padding:7px 0;border-bottom:1px solid #344963;font-size:13px
 }
-.pitching-row span:first-child{flex:1;min-width:0}
-.pitching-row strong{white-space:nowrap}
+.batting-row span:first-child,.pitching-row span:first-child{
+ flex:1;min-width:0
+}
+.batting-row strong,.pitching-row strong{white-space:nowrap}
 .number-usage{
  background:#142235;border:1px solid #344963;
  border-radius:10px;padding:12px;margin:10px 0;text-align:left
@@ -270,6 +291,11 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 </div>
 
 <div id="cpuLastResult" class="result">試合開始前です。</div>
+
+<div id="cpuBattingStats" class="batting-stats">
+ <h3>打率・打席成績</h3>
+ <div>まだ記録はありません。</div>
+</div>
 
 <div id="cpuPitchingStats" class="pitching-stats">
  <h3>投手成績・防御率</h3>
@@ -1938,6 +1964,12 @@ window.startCpuGame=()=>{
   scores:{first:0,second:0},
   hits:{first:0,second:0},
 
+  /* 打者成績 */
+  batterStats:{
+   user:{atBats:0,hits:0},
+   cpu:{atBats:0,hits:0}
+  },
+
   /* CPU対戦の投手成績 */
   pitcherStats:{
    user:{outs:0,runs:0},
@@ -1961,6 +1993,47 @@ window.startCpuGame=()=>{
  $("cpuLastResult").textContent="試合開始！";
  renderCpuGame();
 };
+
+/* CPU打者成績・打率の表示 */
+function renderCpuBattingStats(){
+ const area=$("cpuBattingStats");
+ if(!area||!cpuGame)return;
+
+ area.innerHTML="";
+
+ const title=document.createElement("h3");
+ title.textContent="打率・打席成績";
+ area.appendChild(title);
+
+ const stats=cpuGame.batterStats||{};
+
+ const players=[
+  {id:"user",name:"あなた"},
+  {id:"cpu",name:"CPU"}
+ ];
+
+ players.forEach(player=>{
+  const stat=stats[player.id]||{atBats:0,hits:0};
+  const atBats=Number(stat.atBats)||0;
+  const hits=Number(stat.hits)||0;
+  const average=atBats
+   ?(hits/atBats).toFixed(3).replace(/^0/,"")
+   :"---";
+
+  const row=document.createElement("div");
+  row.className="batting-row";
+
+  const name=document.createElement("span");
+  name.textContent=player.name;
+
+  const result=document.createElement("strong");
+  result.textContent=
+   average+"（"+hits+"安打 / "+atBats+"打数）";
+
+  row.append(name,result);
+  area.appendChild(row);
+ });
+}
 
 /* CPU投手成績の表示 */
 function renderCpuPitchingStats(){
@@ -2011,7 +2084,8 @@ function renderCpuGame(){
  $("cpuHits1").textContent=cpuGame.hits.first;
  $("cpuHits2").textContent=cpuGame.hits.second;
 
- /* 投手成績を毎回更新 */
+ /* 打率と防御率を同時に更新 */
+ renderCpuBattingStats();
  renderCpuPitchingStats();
 
  $("cpuInning").textContent=cpuGame.inning>cpuGame.maxInnings
@@ -2032,8 +2106,6 @@ function renderCpuGame(){
 
  if(cpuGame.finished){
   show("cpuFinishedArea");
-  const first=cpuGame.scores.first;
-  const second=cpuGame.scores.second;
   const userScore=cpuGame.scores[cpuGame.userTeam];
   const cpuTeam=cpuGame.userTeam==="first"?"second":"first";
   const cpuScore=cpuGame.scores[cpuTeam];
@@ -2111,11 +2183,31 @@ function cpuResolveAtBat(guess,secret=null){
  const batting=cpuBattingTeam();
  const defending=cpuDefendingTeam();
 
- /* この打席を担当した投手 */
- const pitcherId=defending===cpuGame.userTeam?"cpu":"user";
+ /* この打席の打者と投手 */
+ const batterId=batting===cpuGame.userTeam?"user":"cpu";
+ const pitcherId=defending===cpuGame.userTeam?"user":"cpu";
 
  const labels=["アウト","ヒット","ツーベース","スリーベース","ホームラン"];
  let runs=0;
+
+ /* 打率の集計 */
+ if(!cpuGame.batterStats){
+  cpuGame.batterStats={
+   user:{atBats:0,hits:0},
+   cpu:{atBats:0,hits:0}
+  };
+ }
+
+ const batterStat=cpuGame.batterStats[batterId]||
+  {atBats:0,hits:0};
+
+ batterStat.atBats++;
+
+ if(hits>0){
+  batterStat.hits++;
+ }
+
+ cpuGame.batterStats[batterId]=batterStat;
 
  if(hits===0){
   cpuGame.outs++;
