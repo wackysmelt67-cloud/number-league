@@ -126,7 +126,6 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 <option value="7">7イニング</option>
 <option value="9" selected>9イニング</option>
 </select>
-
 <div id="soloSetting" class="hidden">
 <label class="setting-label">1人側のチーム</label>
 <select id="soloTeam">
@@ -280,6 +279,7 @@ const app=initializeApp(firebaseConfig);
 const auth=getAuth(app);
 const database=getDatabase(app);
 const $=id=>document.getElementById(id);
+const uid=()=>auth.currentUser?.uid||null;
 
 let selectedMode=2;
 let currentRoomCode=null;
@@ -291,27 +291,59 @@ let chatUnsubscribers=[];
 let resolvingId=null;
 let lastGameWasFinished=false;
 let lastSoundResultId=null;
+let lastTransitionResultId=null;
 let audioContext=null;
 
-function playResultSound(hitCount){
+function getAudio(){
+ const AudioCtx=window.AudioContext||window.webkitAudioContext;
+ if(!AudioCtx)return null;
+ audioContext=audioContext||new AudioCtx();
+ if(audioContext.state==="suspended")audioContext.resume();
+ return audioContext;
+}
+
+function playNotes(notes,type="sine",spacing=0.12){
  if(!$("soundEnabled")?.checked)return;
  try{
-  const AudioCtx=window.AudioContext||window.webkitAudioContext;
-  if(!AudioCtx)return;
-  audioContext=audioContext||new AudioCtx();
-  if(audioContext.state==="suspended")audioContext.resume();
-  const patterns={0:[220,160],1:[440],2:[440,660],3:[440,660,880],4:[523,659,784,1047]};
-  const notes=patterns[hitCount]||[330],start=audioContext.currentTime;
+  const ctx=getAudio();
+  if(!ctx)return;
+  const start=ctx.currentTime;
   notes.forEach((freq,i)=>{
-   const osc=audioContext.createOscillator(),gain=audioContext.createGain();
-   osc.type=hitCount===0?"triangle":"sine";osc.frequency.value=freq;
-   gain.gain.setValueAtTime(0.0001,start+i*0.12);
-   gain.gain.exponentialRampToValueAtTime(0.16,start+i*0.12+0.02);
-   gain.gain.exponentialRampToValueAtTime(0.0001,start+i*0.12+0.18);
-   osc.connect(gain);gain.connect(audioContext.destination);
-   osc.start(start+i*0.12);osc.stop(start+i*0.12+0.2);
+   const osc=ctx.createOscillator();
+   const gain=ctx.createGain();
+   osc.type=type;
+   osc.frequency.value=freq;
+   const t=start+i*spacing;
+   gain.gain.setValueAtTime(0.0001,t);
+   gain.gain.exponentialRampToValueAtTime(0.16,t+0.02);
+   gain.gain.exponentialRampToValueAtTime(0.0001,t+0.19);
+   osc.connect(gain);
+   gain.connect(ctx.destination);
+   osc.start(t);
+   osc.stop(t+0.21);
   });
- }catch(e){console.warn("効果音を再生できませんでした",e);}
+ }catch(e){
+  console.warn("効果音を再生できませんでした",e);
+ }
+}
+
+function playResultSound(hitCount){
+ const patterns={
+  0:[220,160],
+  1:[440],
+  2:[440,660],
+  3:[440,660,880],
+  4:[523,659,784,1047]
+ };
+ playNotes(patterns[hitCount]||[330],hitCount===0?"triangle":"sine");
+}
+
+function playTransitionSound(type){
+ if(type==="batter"){
+  playNotes([660,880],"sine",0.08);
+ }else if(type==="side"){
+  playNotes([392,523,659],"triangle",0.13);
+ }
 }
 
 const roomRef=()=>ref(database,"rooms/"+currentRoomCode);
@@ -379,6 +411,8 @@ function watchRoom(code,role){
  currentRoomCode=code;
  currentRole=role;
  lastGameWasFinished=false;
+ lastSoundResultId=null;
+ lastTransitionResultId=null;
 
  show("gamePanel");
  $("roleTitle").textContent=role==="player"?"プレイヤー画面":"観戦者画面";
@@ -461,9 +495,7 @@ function renderLobby(){
   $("teamSelectArea").classList.toggle("hidden",me?.active===false);
   $("rejoinButton").classList.toggle("hidden",me?.active!==false);
 
-  if(me?.team){
-   $("myTeam").value=me.team;
-  }
+  if(me?.team)$("myTeam").value=me.team;
  }
 
  const ids=playerIds(currentRoom);
@@ -506,8 +538,7 @@ function renderLobby(){
   hide("startButton");
  }
 
- if(!spectator)show("chatArea");
- else show("chatArea");
+ show("chatArea");
 }
 
 window.changeTeam=async()=>{
@@ -728,6 +759,7 @@ window.startGame=async()=>{
   half:"表",
   outs:0,
   maxInnings:Number(currentRoom.innings)||9,
+  extraInnings:false,
   bases:[false,false,false],
   scores:{first:0,second:0},
   teamHits:{first:0,second:0},
@@ -771,7 +803,11 @@ function renderGame(g){
  }
  $("battingStats").innerHTML="<h3>打率・打席成績</h3>"+(statRows.join("")||"<div>まだ記録はありません。</div>");
 
- $("inning").textContent=g.inning+" / "+g.maxInnings;
+ $("inning").textContent=
+  g.inning>g.maxInnings
+   ?g.inning+"回（延長）"
+   :g.inning+" / "+g.maxInnings;
+
  $("half").textContent=g.half;
  $("outs").textContent=g.outs;
 
@@ -783,14 +819,35 @@ function renderGame(g){
   "バッター："+displayName(g.batterUid)+
   " / ピッチャー："+displayName(g.pitcherUid);
 
- if(!g.lastResult&&lastSoundResultId===null)lastSoundResultId=g.atBatId;
+ if(!g.lastResult&&lastSoundResultId===null){
+  lastSoundResultId=null;
+ }
+
  if(g.lastResult){
   const resultId=g.lastResult.id||g.atBatId;
-  if(lastSoundResultId===null)lastSoundResultId=resultId;
-  else if(lastSoundResultId!==resultId){
+
+  if(lastSoundResultId===null){
+   lastSoundResultId=resultId;
+  }else if(lastSoundResultId!==resultId){
    lastSoundResultId=resultId;
    playResultSound(g.lastResult.hits);
   }
+
+  if(lastTransitionResultId===null){
+   lastTransitionResultId=resultId;
+  }else if(lastTransitionResultId!==resultId){
+   lastTransitionResultId=resultId;
+
+   const previousHalf=g.lastResult.previousHalf;
+   const previousBatter=g.lastResult.previousBatterUid;
+
+   if(previousHalf&&previousHalf!==g.half){
+    playTransitionSound("side");
+   }else if(previousBatter&&previousBatter!==g.batterUid){
+    playTransitionSound("batter");
+   }
+  }
+
   $("lastResult").textContent=
    g.lastResult.label+"（一致 "+g.lastResult.hits+"個）"+
    " / 予想："+g.lastResult.guess+
@@ -927,8 +984,10 @@ function calculateNext(g,hits,secret,guess){
  let runs=0;
 
  next.batterTurn[batting]=(next.batterTurn[batting]||0)+1;
+
  const batterStat={...(next.batterStats[batter]||{atBats:0,hits:0})};
  batterStat.atBats++;
+
  if(hits>0){
   batterStat.hits++;
   next.teamHits[batting]=(next.teamHits[batting]||0)+1;
@@ -965,32 +1024,54 @@ function calculateNext(g,hits,secret,guess){
   label:labels[hits],
   secret,
   guess,
-  runs
+  runs,
+  previousHalf:g.half,
+  previousBatterUid:g.batterUid
  };
 
  next.atBatNo++;
 
  if(next.outs>=3){
   next.outs=0;
-  next.bases=[false,false,false];
 
   if(g.half==="表"){
+   // 表の終了。規定最終回で後攻がリードしていれば試合終了。
    if(
     next.inning>=next.maxInnings&&
     (next.scores.second||0)>(next.scores.first||0)
    ){
+    next.bases=[false,false,false];
     next.phase="finished";
     return next;
    }
 
+   // 裏へ交代。延長戦では1塁・2塁に走者を置く。
    next.half="裏";
+   next.bases=next.inning>next.maxInnings
+    ?[true,true,false]
+    :[false,false,false];
+
   }else{
-   if(next.inning>=next.maxInnings){
+   const firstScore=next.scores.first||0;
+   const secondScore=next.scores.second||0;
+
+   // 規定回以降、裏が終了して同点でなければ試合終了。
+   if(next.inning>=next.maxInnings&&firstScore!==secondScore){
+    next.bases=[false,false,false];
     next.phase="finished";
     return next;
    }
+
+   // 規定回終了後も同点なら延長へ。
    next.inning++;
    next.half="表";
+
+   if(next.inning>next.maxInnings){
+    next.extraInnings=true;
+    next.bases=[true,true,false];
+   }else{
+    next.bases=[false,false,false];
+   }
   }
  }
 
@@ -1082,6 +1163,7 @@ window.switchPitcher=async()=>{
 window.leaveGame=async()=>{
  if(isSpectator())return;
  if(!confirm("一時退出しますか？"))return;
+
  try{
   await update(ref(database,"rooms/"+currentRoomCode+"/players/"+uid()),{
    active:false,ready:false
@@ -1183,8 +1265,11 @@ window.startRematch=async()=>{
  if(!first.length||!second.length)return;
 
  const initial={
-  inning:1,half:"表",outs:0,
+  inning:1,
+  half:"表",
+  outs:0,
   maxInnings:Number(currentRoom.innings)||9,
+  extraInnings:false,
   bases:[false,false,false],
   scores:{first:0,second:0},
   teamHits:{first:0,second:0},
@@ -1196,11 +1281,14 @@ window.startRematch=async()=>{
   phase:"setup",
   atBatNo:1,
   atBatId:"1-表-1-"+Date.now(),
-  guess:null,lastResult:null
+  guess:null,
+  lastResult:null
  };
 
  await set(gameRef(),initial);
  lastGameWasFinished=false;
+ lastSoundResultId=null;
+ lastTransitionResultId=null;
  status("再戦を開始しました。");
 };
 
@@ -1226,33 +1314,40 @@ function watchChat(){
  for(const team of teams){
   const unsub=onValue(
    ref(database,"teamChats/"+currentRoomCode+"/"+team),
-   snap=>{
-    const messages=snap.val()||{};
-    const entries=Object.entries(messages).sort((a,b)=>
-     (a[1].createdAt||0)-(b[1].createdAt||0)
-    );
-
-    list.innerHTML="";
-    for(const t of ["first","second"]){
-     if(!teams.includes(t))continue;
-     if(t!==team)continue;
-
-     for(const [id,m] of entries){
-      const div=document.createElement("div");
-      div.className="chat-message";
-      const label=document.createElement("small");
-      label.textContent=teamLabel(team)+" / "+(m.uid===uid()?"自分":"プレイヤー");
-      const body=document.createElement("div");
-      body.textContent=m.text||"";
-      div.append(label,body);
-      list.appendChild(div);
-     }
-    }
-    list.scrollTop=list.scrollHeight;
+   ()=>{
+    renderChatMessages(teams);
    }
   );
   chatUnsubscribers.push(unsub);
  }
+}
+
+async function renderChatMessages(teams){
+ const list=$("chatList");
+ const all=[];
+
+ for(const team of teams){
+  const snap=await get(ref(database,"teamChats/"+currentRoomCode+"/"+team));
+  const messages=snap.val()||{};
+  for(const [id,m] of Object.entries(messages)){
+   all.push({team,id,...m});
+  }
+ }
+
+ all.sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+ list.innerHTML="";
+
+ for(const m of all){
+  const div=document.createElement("div");
+  div.className="chat-message";
+  const label=document.createElement("small");
+  label.textContent=teamLabel(m.team)+" / "+(m.uid===uid()?"自分":"プレイヤー");
+  const body=document.createElement("div");
+  body.textContent=m.text||"";
+  div.append(label,body);
+  list.appendChild(div);
+ }
+ list.scrollTop=list.scrollHeight;
 }
 
 window.sendChat=async()=>{
