@@ -192,6 +192,50 @@ input,select{
 .game-log-entry:last-child{border-bottom:0}
 .game-log-empty{color:#aab9cc;font-size:12px}
 
+/* 打席結果の色分け */
+.play-out{
+ color:#ff8585;
+ font-weight:bold
+}
+.play-hit{
+ color:#65e69a;
+ font-weight:bold
+}
+.play-double{
+ color:#65baff;
+ font-weight:bold
+}
+.play-triple{
+ color:#c69aff;
+ font-weight:bold
+}
+.play-homerun{
+ color:#ffd166;
+ font-weight:bold;
+ text-shadow:0 0 8px rgba(255,209,102,.25)
+}
+.play-special{
+ display:inline-block;
+ color:#ffd166;
+ background:#493d24;
+ border:1px solid #a98a3c;
+ border-radius:6px;
+ padding:2px 7px;
+ margin:3px 3px 3px 0;
+ font-weight:bold;
+ font-size:12px
+}
+.play-special.walkoff{
+ color:#fff0a6;
+ background:#65442c;
+ border-color:#ffd166;
+ font-size:13px
+}
+.play-result-line{
+ display:block;
+ margin-top:4px
+}
+
 footer{color:#8294aa;font-size:11px;margin-top:25px}
 </style>
 </head>
@@ -568,6 +612,130 @@ window.savePlayerName=async()=>{
   status("名前の保存に失敗しました："+e.message);
  }
 };
+
+/* 打席結果の色分け用 */
+function playResultClass(hits){
+ const classes=[
+  "play-out",
+  "play-hit",
+  "play-double",
+  "play-triple",
+  "play-homerun"
+ ];
+ return classes[Number(hits)]||"";
+}
+
+/* 特別な打撃結果を判定 */
+function classifyPlay({
+ hits,
+ runs,
+ batting,
+ scoresBefore,
+ scoresAfter,
+ inning,
+ half,
+ maxInnings,
+ wasFirstBatter
+}){
+ const tags=[];
+ const beforeBatting=Number(scoresBefore?.[batting])||0;
+ const beforeOpponent=Number(scoresBefore?.[batting==="first"?"second":"first"])||0;
+ const afterBatting=Number(scoresAfter?.[batting])||0;
+ const afterOpponent=Number(scoresAfter?.[batting==="first"?"second":"first"])||0;
+
+ const walkoff=
+  half==="裏"&&
+  batting==="second"&&
+  Number(inning)>=Number(maxInnings)&&
+  afterBatting>afterOpponent&&
+  beforeBatting<=beforeOpponent;
+
+ if(hits===4){
+  if(walkoff){
+   tags.push("サヨナラホームラン");
+  }else if(wasFirstBatter){
+   tags.push("先頭打者ホームラン");
+  }
+
+  if(runs===1)tags.push("ソロホームラン");
+  if(runs===2)tags.push("2ランホームラン");
+  if(runs===3)tags.push("3ランホームラン");
+  if(runs>=4)tags.push("満塁ホームラン");
+ }
+
+ if(walkoff&&hits>0&&hits<4){
+  tags.push("サヨナラヒット");
+ }
+
+ if(afterBatting>afterOpponent&&beforeBatting<=beforeOpponent){
+  if(beforeBatting<beforeOpponent){
+   tags.push("逆転");
+  }else{
+   tags.push("勝ち越し");
+  }
+ }
+
+ if(hits>0&&hits<4&&runs>0){
+  tags.push("タイムリーヒット");
+ }
+
+ return tags;
+}
+
+/* 判定結果を安全に表示する */
+function renderPlayResult(element,result){
+ if(!element)return;
+ element.textContent="";
+
+ if(!result){
+  element.textContent="まだ打席はありません。";
+  return;
+ }
+
+ const label=document.createElement("span");
+ label.className=playResultClass(result.hits);
+ label.textContent=
+  (result.label||"判定")+
+  "（一致 "+result.hits+"個）";
+ element.appendChild(label);
+
+ const detail=document.createElement("div");
+ detail.className="play-result-line";
+ detail.textContent=
+  "予想："+(result.guess||"----")+
+  " / 守備側："+(result.secret||"----")+
+  " / 得点："+(Number(result.runs)||0);
+ element.appendChild(detail);
+
+ if(Array.isArray(result.playTags)){
+  result.playTags.forEach(tag=>{
+   const badge=document.createElement("span");
+   badge.className="play-special"+
+    (String(tag).includes("サヨナラ")?" walkoff":"");
+   badge.textContent=tag;
+   element.appendChild(badge);
+  });
+ }
+}
+
+/* 試合履歴の判定部分を色付きで追加 */
+function appendLogResult(row,item){
+ const result=document.createElement("span");
+ result.className=playResultClass(item.hits);
+ result.textContent=
+  (item.label||"判定")+"（一致 "+item.hits+"個）";
+ row.appendChild(result);
+
+ if(Array.isArray(item.playTags)){
+  item.playTags.forEach(tag=>{
+   const badge=document.createElement("span");
+   badge.className="play-special"+
+    (String(tag).includes("サヨナラ")?" walkoff":"");
+   badge.textContent=tag;
+   row.appendChild(badge);
+  });
+ }
+}
 
 function playResultSound(hitCount){
  if(!$("soundEnabled")?.checked)return;
@@ -1047,6 +1215,7 @@ window.startGame=async()=>{
  const initial={
   inning:1,
   half:"表",
+  halfAtBats:0,
   outs:0,
   maxInnings:Number(currentRoom.innings)||9,
   bases:[false,false,false],
@@ -1202,19 +1371,24 @@ function renderOnlineGameLog(g){
   const row=document.createElement("div");
   row.className="game-log-entry";
 
-  row.textContent=
+  row.appendChild(document.createTextNode(
    (index+1)+"打席目　"+
    item.inning+"回"+item.half+
    " / 打者："+(item.batterName||displayName(item.batterUid))+
    " / 予想："+item.guess+
    " / 守備："+item.secret+
-   " / "+item.label+
-   "（一致 "+item.hits+"個）"+
+   " / "
+  ));
+
+  appendLogResult(row,item);
+
+  row.appendChild(document.createTextNode(
    (item.reachedBase?" / 出塁："+(item.batterName||"打者")+"（"+item.guess+"）":"")+
    " / 得点："+item.runs+
    (item.scoredRunners?.length
     ?" / 得点者："+item.scoredRunners.map(r=>runnerDisplayName(r)+"（"+r.number+"）").join("、")
-    :"");
+    :"")
+  ));
 
   area.appendChild(row);
  });
@@ -1235,7 +1409,6 @@ function renderNumberUsage(g){
 
  const allUsage=g.numberUsage||{};
 
- /* 打者の予想数字＋投手の秘密の数字を合わせた全体集計 */
  const summary=document.createElement("div");
  summary.className="number-player";
  appendNumberUsageSummary(
@@ -1467,11 +1640,7 @@ function renderGame(g){
    playResultSound(g.lastResult.hits);
   }
 
-  $("lastResult").textContent=
-   g.lastResult.label+"（一致 "+g.lastResult.hits+"個）"+
-   " / 予想："+g.lastResult.guess+
-   " / 守備側："+g.lastResult.secret+
-   " / 得点："+g.lastResult.runs;
+  renderPlayResult($("lastResult"),g.lastResult);
  }else{
   $("lastResult").textContent="まだ打席はありません。";
  }
@@ -1616,6 +1785,10 @@ function calculateNext(g,hits,secret,guess){
  const batterName=currentRoom?.players?.[batter]?.name||"名前未設定";
  const pitcherName=currentRoom?.players?.[pitcher]?.name||"名前未設定";
 
+ const scoresBefore={...next.scores};
+ const wasFirstBatter=(Number(g.halfAtBats)||0)===0;
+ next.halfAtBats=(Number(g.halfAtBats)||0)+1;
+
  let runs=0;
  let scoredRunners=[];
 
@@ -1721,6 +1894,18 @@ function calculateNext(g,hits,secret,guess){
   next.scores[batting]=(next.scores[batting]||0)+runs;
  }
 
+ const playTags=classifyPlay({
+  hits,
+  runs,
+  batting,
+  scoresBefore,
+  scoresAfter:next.scores,
+  inning:g.inning,
+  half:g.half,
+  maxInnings:g.maxInnings,
+  wasFirstBatter
+ });
+
  /* この打席の履歴を記録 */
  next.gameLog.push({
   inning:g.inning,
@@ -1736,7 +1921,8 @@ function calculateNext(g,hits,secret,guess){
   label:labels[hits],
   reachedBase:hits>0,
   runs,
-  scoredRunners
+  scoredRunners,
+  playTags
  });
 
  if(next.gameLog.length>300){
@@ -1761,10 +1947,23 @@ function calculateNext(g,hits,secret,guess){
   label:labels[hits],
   secret:secretNumber,
   guess:guessNumber,
-  runs
+  runs,
+  playTags
  };
 
  next.atBatNo++;
+
+ /* 最終回以降の裏で後攻が勝ち越したら即終了 */
+ if(
+  g.half==="裏"&&
+  g.inning>=g.maxInnings&&
+  (next.scores.second||0)>(next.scores.first||0)
+ ){
+  next.bases=[false,false,false];
+  next.baseRunners=[null,null,null];
+  next.phase="finished";
+  return next;
+ }
 
  if(next.outs>=3){
   next.outs=0;
@@ -1781,6 +1980,7 @@ function calculateNext(g,hits,secret,guess){
    }
 
    next.half="裏";
+   next.halfAtBats=0;
 
    if(next.inning>next.maxInnings){
     next.bases=[true,true,false];
@@ -1803,11 +2003,13 @@ function calculateNext(g,hits,secret,guess){
 
     next.inning++;
     next.half="表";
+    next.halfAtBats=0;
     next.bases=[true,true,false];
     next.baseRunners=[null,null,null];
    }else{
     next.inning++;
     next.half="表";
+    next.halfAtBats=0;
     next.bases=[false,false,false];
     next.baseRunners=[null,null,null];
    }
@@ -1974,7 +2176,7 @@ async function restorePlayerToGame(code){
  if(Object.keys(changes).length){
   await update(ref(database,"gameStates/"+code),changes);
  }
-}
+};
 
 window.rejoinGame=async()=>{
  try{
@@ -2008,6 +2210,7 @@ window.startRematch=async()=>{
  const initial={
   inning:1,
   half:"表",
+  halfAtBats:0,
   outs:0,
   maxInnings:Number(currentRoom.innings)||9,
   bases:[false,false,false],
@@ -2270,6 +2473,7 @@ window.startCpuGame=()=>{
   maxInnings:innings,
   inning:1,
   half:"表",
+  halfAtBats:0,
   outs:0,
   bases:[false,false,false],
   baseRunners:[null,null,null],
@@ -2444,16 +2648,22 @@ function renderCpuGameLog(){
    .map(r=>r.name+"（"+r.number+"）")
    .join("、");
 
-  row.textContent=
+  row.appendChild(document.createTextNode(
    (index+1)+"打席目　"+
    item.inning+"回"+item.half+
    " / 打者："+item.batterName+
    " / 予想："+item.guess+
    " / 守備："+item.secret+
-   " / "+item.label+
+   " / "
+  ));
+
+  appendLogResult(row,item);
+
+  row.appendChild(document.createTextNode(
    (item.reachedBase?" / 出塁："+item.batterName+"（"+item.guess+"）":"")+
    " / 得点："+item.runs+
-   (scored?" / 得点者："+scored:"");
+   (scored?" / 得点者："+scored:"")
+  ));
 
   area.appendChild(row);
  });
@@ -2483,6 +2693,10 @@ function renderCpuGame(){
 
  for(let i=1;i<=3;i++){
   $("cpuBase"+i).classList.toggle("on",!!cpuGame.bases[i-1]);
+ }
+
+ if(cpuGame.lastResult){
+  renderPlayResult($("cpuLastResult"),cpuGame.lastResult);
  }
 
  hide("cpuDefenseArea");
@@ -2537,7 +2751,6 @@ window.cpuSubmitDefense=()=>{
  show("cpuWaitingArea");
  $("cpuWaitingArea").textContent="CPUが数字を予想しています...";
 
- /* 待機表示を維持してCPUの判定を進める */
  cpuTimer=setTimeout(()=>{
   if(!cpuGame||cpuGame.finished||cpuUserIsBatting())return;
 
@@ -2561,7 +2774,6 @@ window.cpuSubmitGuess=()=>{
  const secret=cpuRandomNumber(cpuGame.difficulty);
  cpuResolveAtBat(guess,secret);
 };
-
 /* CPU対戦の打席処理 */
 function cpuResolveAtBat(guess,secret=null){
  if(!cpuGame||cpuGame.finished)return;
@@ -2587,6 +2799,11 @@ function cpuResolveAtBat(guess,secret=null){
  const pitcherName=pitcherId==="user"?"あなた":"CPU";
 
  const labels=["アウト","ヒット","ツーベース","スリーベース","ホームラン"];
+ const scoresBefore={...cpuGame.scores};
+ const wasFirstBatter=(Number(cpuGame.halfAtBats)||0)===0;
+
+ cpuGame.halfAtBats=(Number(cpuGame.halfAtBats)||0)+1;
+
  let runs=0;
  let scoredRunners=[];
 
@@ -2671,6 +2888,19 @@ function cpuResolveAtBat(guess,secret=null){
  if(hits>0)cpuGame.hits[batting]++;
  if(runs>0)cpuGame.scores[batting]+=runs;
 
+ /* 特別な打撃結果を判定 */
+ const playTags=classifyPlay({
+  hits,
+  runs,
+  batting,
+  scoresBefore,
+  scoresAfter:cpuGame.scores,
+  inning:logInning,
+  half:logHalf,
+  maxInnings:cpuGame.maxInnings,
+  wasFirstBatter
+ });
+
  /* 投手別の投球回・失点を集計 */
  const pitcherStat=cpuGame.pitcherStats[pitcherId]||
   {outs:0,runs:0};
@@ -2695,7 +2925,8 @@ function cpuResolveAtBat(guess,secret=null){
   label:labels[hits],
   reachedBase:hits>0,
   runs,
-  scoredRunners
+  scoredRunners,
+  playTags
  });
 
  if(cpuGame.gameLog.length>300){
@@ -2703,23 +2934,38 @@ function cpuResolveAtBat(guess,secret=null){
  }
 
  cpuGame.lastResult={
-  hits,guess,secret,runs,label:labels[hits]
+  hits,
+  guess,
+  secret,
+  runs,
+  label:labels[hits],
+  playTags
  };
 
  const scoredText=scoredRunners.length
   ?" / 得点者："+scoredRunners.map(r=>r.name+"（"+r.number+"）").join("、")
   :"";
 
- $("cpuLastResult").textContent=
-  labels[hits]+"（一致 "+hits+"個）"+
-  " / 予想："+guess+
-  " / 守備側："+secret+
-  " / 得点："+runs+
-  scoredText;
+ renderPlayResult($("cpuLastResult"),cpuGame.lastResult);
 
  cpuPlaySound(hits);
 
  cpuGame.atBatNo++;
+
+ /* 最終回以降の裏で後攻が勝ち越したら即終了 */
+ if(
+  logHalf==="裏"&&
+  logInning>=cpuGame.maxInnings&&
+  cpuGame.scores.second>cpuGame.scores.first
+ ){
+  cpuGame.bases=[false,false,false];
+  cpuGame.baseRunners=[null,null,null];
+  cpuGame.finished=true;
+  cpuGame.phase="finished";
+  cpuGame.secret=null;
+  renderCpuGame();
+  return;
+ }
 
  if(cpuGame.outs>=3){
   cpuGame.outs=0;
@@ -2732,11 +2978,14 @@ function cpuResolveAtBat(guess,secret=null){
     cpuGame.bases=[false,false,false];
     cpuGame.baseRunners=[null,null,null];
     cpuGame.finished=true;
+    cpuGame.phase="finished";
+    cpuGame.secret=null;
     renderCpuGame();
     return;
    }
 
    cpuGame.half="裏";
+   cpuGame.halfAtBats=0;
 
    if(cpuGame.inning>cpuGame.maxInnings){
     cpuGame.bases=[true,true,false];
@@ -2756,17 +3005,21 @@ function cpuResolveAtBat(guess,secret=null){
      cpuGame.bases=[false,false,false];
      cpuGame.baseRunners=[null,null,null];
      cpuGame.finished=true;
+     cpuGame.phase="finished";
+     cpuGame.secret=null;
      renderCpuGame();
      return;
     }
 
     cpuGame.inning++;
     cpuGame.half="表";
+    cpuGame.halfAtBats=0;
     cpuGame.bases=[true,true,false];
     cpuGame.baseRunners=[null,null,null];
    }else{
     cpuGame.inning++;
     cpuGame.half="表";
+    cpuGame.halfAtBats=0;
     cpuGame.bases=[false,false,false];
     cpuGame.baseRunners=[null,null,null];
    }
