@@ -319,6 +319,11 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
  <div>まだ記録はありません。</div>
 </div>
 
+<div id="cpuNumberUsageStats" class="number-usage">
+ <h3>数字の使用率</h3>
+ <div>まだ記録はありません。</div>
+</div>
+
 <div id="cpuGameLog" class="game-log">
  <h3>試合履歴</h3>
  <div class="game-log-empty">まだ記録はありません。</div>
@@ -424,7 +429,7 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 </div>
 
 <div id="numberUsageStats" class="number-usage">
- <h3>投手別・数字の使用率</h3>
+ <h3>数字の使用率</h3>
  <div>まだ記録はありません。</div>
 </div>
 
@@ -1045,11 +1050,14 @@ window.startGame=async()=>{
   outs:0,
   maxInnings:Number(currentRoom.innings)||9,
   bases:[false,false,false],
+  baseRunners:[null,null,null],
   scores:{first:0,second:0},
   teamHits:{first:0,second:0},
   batterStats:{},
   pitcherStats:{},
-  numberUsage:{},
+  numberUsage:{
+   all:{totalNumbers:0,fourDigit:{},singleDigits:{}}
+  },
   gameLog:[],
   batterTurn:{first:0,second:0},
   batterUid:first[0],
@@ -1069,6 +1077,106 @@ window.startGame=async()=>{
 function battingTeam(g){return g.half==="表"?"first":"second"}
 function defendingTeam(g){return g.half==="表"?"second":"first"}
 
+/* ランナーの名前を履歴表示用に取得 */
+function runnerDisplayName(runner){
+ if(!runner)return "不明";
+ return runner.name||displayName(runner.uid);
+}
+
+/* 4桁数字・0〜9の集計を表示する共通関数 */
+function appendNumberUsageSummary(area,usage,titleText){
+ const title=document.createElement("div");
+ title.className="number-section-title";
+ title.textContent=titleText;
+ area.appendChild(title);
+
+ const total=Number(usage?.totalNumbers)||0;
+ const fourDigit=usage?.fourDigit||{};
+ const singleDigits=usage?.singleDigits||{};
+ const digitTotal=total*4;
+
+ const fourTitle=document.createElement("div");
+ fourTitle.className="number-section-title";
+ fourTitle.textContent="4桁の数字 使用回数 TOP3";
+ area.appendChild(fourTitle);
+
+ const fourEntries=Object.entries(fourDigit)
+  .sort((a,b)=>(Number(b[1])||0)-(Number(a[1])||0)||a[0].localeCompare(b[0]))
+  .slice(0,3);
+
+ if(!fourEntries.length){
+  const empty=document.createElement("div");
+  empty.textContent="まだ記録はありません。";
+  area.appendChild(empty);
+ }
+
+ fourEntries.forEach(([number,count],index)=>{
+  const rate=total?(Number(count)||0)/total*100:0;
+  const row=document.createElement("div");
+  row.className="number-ranking-row";
+
+  const left=document.createElement("span");
+  left.textContent=(index+1)+"位　"+number;
+
+  const right=document.createElement("strong");
+  right.textContent=(Number(count)||0)+"回 / "+rate.toFixed(1)+"%";
+
+  row.append(left,right);
+  area.appendChild(row);
+
+  const bar=document.createElement("div");
+  bar.className="number-bar";
+  const fill=document.createElement("div");
+  fill.className="number-bar-fill";
+  fill.style.width=Math.min(rate,100)+"%";
+  bar.appendChild(fill);
+  area.appendChild(bar);
+ });
+
+ const digitTitle=document.createElement("div");
+ digitTitle.className="number-section-title";
+ digitTitle.textContent="各数字の使用回数・使用率（0〜9）";
+ area.appendChild(digitTitle);
+
+ const grid=document.createElement("div");
+ grid.className="number-digit-grid";
+
+ for(let i=0;i<10;i++){
+  const digit=String(i);
+  const count=Number(singleDigits[digit])||0;
+  const rate=digitTotal?count/digitTotal*100:0;
+
+  const cell=document.createElement("div");
+  cell.className="number-digit-cell";
+
+  const row=document.createElement("div");
+  row.className="number-ranking-row";
+
+  const left=document.createElement("span");
+  left.textContent=digit;
+
+  const right=document.createElement("strong");
+  right.textContent=count+"回";
+
+  row.append(left,right);
+
+  const percentage=document.createElement("div");
+  percentage.className="number-digit-rate";
+  percentage.textContent=rate.toFixed(1)+"%";
+
+  cell.append(row,percentage);
+  grid.appendChild(cell);
+ }
+
+ area.appendChild(grid);
+
+ const totalText=document.createElement("div");
+ totalText.className="number-total";
+ totalText.textContent=
+  "集計した4桁数字："+total+"個 / 集計した数字の桁数："+digitTotal+"桁";
+ area.appendChild(totalText);
+}
+
 /* オンライン試合履歴 */
 function renderOnlineGameLog(g){
  const area=$("onlineGameLog");
@@ -1077,7 +1185,7 @@ function renderOnlineGameLog(g){
  area.innerHTML="";
 
  const title=document.createElement("h3");
- title.textContent="試合履歴";
+ title.textContent="試合履歴・出塁・得点記録";
  area.appendChild(title);
 
  const entries=Array.isArray(g.gameLog)?g.gameLog:[];
@@ -1094,17 +1202,19 @@ function renderOnlineGameLog(g){
   const row=document.createElement("div");
   row.className="game-log-entry";
 
-  const batter=item.batterName||displayName(item.batterUid);
-
   row.textContent=
    (index+1)+"打席目　"+
    item.inning+"回"+item.half+
-   " / "+batter+
+   " / 打者："+(item.batterName||displayName(item.batterUid))+
    " / 予想："+item.guess+
    " / 守備："+item.secret+
    " / "+item.label+
    "（一致 "+item.hits+"個）"+
-   " / 得点："+item.runs;
+   (item.reachedBase?" / 出塁："+(item.batterName||"打者")+"（"+item.guess+"）":"")+
+   " / 得点："+item.runs+
+   (item.scoredRunners?.length
+    ?" / 得点者："+item.scoredRunners.map(r=>runnerDisplayName(r)+"（"+r.number+"）").join("、")
+    :"");
 
   area.appendChild(row);
  });
@@ -1112,7 +1222,7 @@ function renderOnlineGameLog(g){
  area.scrollTop=area.scrollHeight;
 }
 
-/* 投手別・数字使用率の表示 */
+/* 投手別＋全体の数字使用率の表示 */
 function renderNumberUsage(g){
  const area=$("numberUsageStats");
  if(!area)return;
@@ -1120,15 +1230,27 @@ function renderNumberUsage(g){
  area.innerHTML="";
 
  const title=document.createElement("h3");
- title.textContent="投手別・数字の使用率";
+ title.textContent="数字の使用率";
  area.appendChild(title);
 
  const allUsage=g.numberUsage||{};
- const pitcherIds=Object.keys(allUsage);
+
+ /* 打者の予想数字＋投手の秘密の数字を合わせた全体集計 */
+ const summary=document.createElement("div");
+ summary.className="number-player";
+ appendNumberUsageSummary(
+  summary,
+  allUsage.all||{},
+  "全選手の数字使用率（打者の予想＋投手の秘密）"
+ );
+ area.appendChild(summary);
+
+ const pitcherIds=Object.keys(allUsage).filter(id=>id!=="all");
 
  if(!pitcherIds.length){
   const empty=document.createElement("div");
-  empty.textContent="まだ記録はありません。";
+  empty.className="number-total";
+  empty.textContent="投手別の記録はまだありません。";
   area.appendChild(empty);
   return;
  }
@@ -1148,7 +1270,7 @@ function renderNumberUsage(g){
 
   const fourTitle=document.createElement("div");
   fourTitle.className="number-section-title";
-  fourTitle.textContent="4桁の数字 使用率 TOP3";
+  fourTitle.textContent="秘密の4桁 使用回数 TOP3";
   section.appendChild(fourTitle);
 
   const fourEntries=Object.entries(usage.fourDigit||{})
@@ -1189,7 +1311,7 @@ function renderNumberUsage(g){
 
   const digitTitle=document.createElement("div");
   digitTitle.className="number-section-title";
-  digitTitle.textContent="単体の数字 使用率（0〜9）";
+  digitTitle.textContent="秘密の数字：各桁の使用率";
   section.appendChild(digitTitle);
 
   const grid=document.createElement("div");
@@ -1197,18 +1319,10 @@ function renderNumberUsage(g){
 
   const digitCounts=usage.singleDigits||{};
 
-  const digitEntries=Array.from({length:10},(_,i)=>String(i))
-   .map(digit=>({
-    digit,
-    count:Number(digitCounts[digit])||0
-   }))
-   .sort((a,b)=>b.count-a.count||
-    Number(a.digit)-Number(b.digit));
-
-  digitEntries.forEach((item,index)=>{
-   const rate=digitTotal
-    ?item.count/digitTotal*100
-    :0;
+  for(let i=0;i<10;i++){
+   const digit=String(i);
+   const count=Number(digitCounts[digit])||0;
+   const rate=digitTotal?count/digitTotal*100:0;
 
    const cell=document.createElement("div");
    cell.className="number-digit-cell";
@@ -1217,10 +1331,10 @@ function renderNumberUsage(g){
    row.className="number-ranking-row";
 
    const left=document.createElement("span");
-   left.textContent=(index+1)+"位　"+item.digit;
+   left.textContent=digit;
 
    const right=document.createElement("strong");
-   right.textContent=item.count+"回";
+   right.textContent=count+"回";
 
    row.append(left,right);
 
@@ -1230,7 +1344,7 @@ function renderNumberUsage(g){
 
    cell.append(row,percentage);
    grid.appendChild(cell);
-  });
+  }
 
   section.appendChild(grid);
 
@@ -1287,7 +1401,6 @@ function renderPitchingStats(g){
   area.appendChild(row);
  }
 }
-
 function renderGame(g){
  const me=uid();
  const batting=battingTeam(g);
@@ -1343,7 +1456,9 @@ function renderGame(g){
  $("turnInfo").textContent=
   "バッター："+displayName(g.batterUid)+
   " / ピッチャー："+displayName(g.pitcherUid);
+
  if(!g.lastResult&&lastSoundResultId===null)lastSoundResultId=g.atBatId;
+
  if(g.lastResult){
   const resultId=g.lastResult.id||g.atBatId;
   if(lastSoundResultId===null)lastSoundResultId=resultId;
@@ -1351,6 +1466,7 @@ function renderGame(g){
    lastSoundResultId=resultId;
    playResultSound(g.lastResult.hits);
   }
+
   $("lastResult").textContent=
    g.lastResult.label+"（一致 "+g.lastResult.hits+"個）"+
    " / 予想："+g.lastResult.guess+
@@ -1470,16 +1586,25 @@ window.submitGuess=async()=>{
  }
 };
 
+/* オンラインの打席処理 */
 function calculateNext(g,hits,secret,guess){
  const next={
   ...g,
   bases:[...(g.bases||[false,false,false])],
+  baseRunners:[...(g.baseRunners||[null,null,null])],
   scores:{...g.scores},
   batterTurn:{...g.batterTurn},
   teamHits:{...(g.teamHits||{first:0,second:0})},
   batterStats:{...(g.batterStats||{})},
   pitcherStats:{...(g.pitcherStats||{})},
-  numberUsage:{...(g.numberUsage||{})},
+  numberUsage:{
+   ...(g.numberUsage||{}),
+   all:{
+    totalNumbers:Number(g.numberUsage?.all?.totalNumbers)||0,
+    fourDigit:{...(g.numberUsage?.all?.fourDigit||{})},
+    singleDigits:{...(g.numberUsage?.all?.singleDigits||{})}
+   }
+  },
   gameLog:[...(g.gameLog||[])]
  };
 
@@ -1488,20 +1613,40 @@ function calculateNext(g,hits,secret,guess){
  const labels=["アウト","ヒット","ツーベース","スリーベース","ホームラン"];
  const batter=g.batterUid;
  const pitcher=g.pitcherUid;
+ const batterName=currentRoom?.players?.[batter]?.name||"名前未設定";
+ const pitcherName=currentRoom?.players?.[pitcher]?.name||"名前未設定";
+
  let runs=0;
+ let scoredRunners=[];
 
  next.batterTurn[batting]=(next.batterTurn[batting]||0)+1;
+
  const batterStat={...(next.batterStats[batter]||{atBats:0,hits:0})};
  batterStat.atBats++;
+
  if(hits>0){
   batterStat.hits++;
   next.teamHits[batting]=(next.teamHits[batting]||0)+1;
  }
  next.batterStats[batter]=batterStat;
 
- /* 投手別の秘密の数字の使用回数を集計 */
+ /* 打者の予想数字＋投手の秘密の数字を全体集計 */
  const secretNumber=String(secret).padStart(4,"0");
+ const guessNumber=String(guess).padStart(4,"0");
+ const allUsage=next.numberUsage.all;
 
+ for(const number of [secretNumber,guessNumber]){
+  allUsage.totalNumbers++;
+  allUsage.fourDigit[number]=
+   (Number(allUsage.fourDigit[number])||0)+1;
+
+  for(const digit of number){
+   allUsage.singleDigits[digit]=
+    (Number(allUsage.singleDigits[digit])||0)+1;
+  }
+ }
+
+ /* 投手別には秘密の数字だけを集計 */
  const previousUsage=next.numberUsage[pitcher]||{};
  const usage={
   totalPitches:Number(previousUsage.totalPitches)||0,
@@ -1510,7 +1655,6 @@ function calculateNext(g,hits,secret,guess){
  };
 
  usage.totalPitches++;
-
  usage.fourDigit[secretNumber]=
   (Number(usage.fourDigit[secretNumber])||0)+1;
 
@@ -1521,24 +1665,56 @@ function calculateNext(g,hits,secret,guess){
 
  next.numberUsage[pitcher]=usage;
 
+ /* 打者が出塁した場合のランナー情報 */
+ const batterRunner={
+  uid:batter,
+  name:batterName,
+  number:guessNumber
+ };
+
  if(hits===0){
   next.outs++;
  }else if(hits===4){
-  runs=1+next.bases.filter(Boolean).length;
+  /* ホームラン：塁上の全員と打者が得点 */
+  scoredRunners=next.baseRunners.filter(Boolean);
+  scoredRunners.push(batterRunner);
+
+  runs=scoredRunners.length;
   next.bases=[false,false,false];
+  next.baseRunners=[null,null,null];
  }else{
+  /* ヒット：既存ランナーを進塁させる */
   const newBases=[false,false,false];
+  const newRunners=[null,null,null];
 
   for(let i=2;i>=0;i--){
-   if(next.bases[i]){
+   const runner=next.baseRunners[i];
+
+   if(runner){
     const destination=i+hits;
-    if(destination>=3)runs++;
-    else newBases[destination]=true;
+
+    if(destination>=3){
+     scoredRunners.push(runner);
+    }else{
+     newBases[destination]=true;
+     newRunners[destination]=runner;
+    }
    }
   }
 
-  newBases[hits-1]=true;
+  /* 打者本人を出塁させる */
+  const batterDestination=hits-1;
+
+  if(batterDestination>=3){
+   scoredRunners.push(batterRunner);
+  }else{
+   newBases[batterDestination]=true;
+   newRunners[batterDestination]=batterRunner;
+  }
+
   next.bases=newBases;
+  next.baseRunners=newRunners;
+  runs=scoredRunners.length;
  }
 
  if(runs>0){
@@ -1551,14 +1727,16 @@ function calculateNext(g,hits,secret,guess){
   half:g.half,
   atBatNo:g.atBatNo||1,
   batterUid:batter,
-  batterName:currentRoom?.players?.[batter]?.name||"名前未設定",
+  batterName,
   pitcherUid:pitcher,
-  pitcherName:currentRoom?.players?.[pitcher]?.name||"名前未設定",
-  guess:String(guess),
-  secret:String(secret),
-  hits:hits,
+  pitcherName,
+  guess:guessNumber,
+  secret:secretNumber,
+  hits,
   label:labels[hits],
-  runs:runs
+  reachedBase:hits>0,
+  runs,
+  scoredRunners
  });
 
  if(next.gameLog.length>300){
@@ -1581,8 +1759,8 @@ function calculateNext(g,hits,secret,guess){
   hits,
   id:g.atBatId+"-result",
   label:labels[hits],
-  secret,
-  guess,
+  secret:secretNumber,
+  guess:guessNumber,
   runs
  };
 
@@ -1597,14 +1775,20 @@ function calculateNext(g,hits,secret,guess){
     (next.scores.second||0)>(next.scores.first||0)
    ){
     next.bases=[false,false,false];
+    next.baseRunners=[null,null,null];
     next.phase="finished";
     return next;
    }
 
    next.half="裏";
-   next.bases=next.inning>next.maxInnings
-    ?[true,true,false]
-    :[false,false,false];
+
+   if(next.inning>next.maxInnings){
+    next.bases=[true,true,false];
+    next.baseRunners=[null,null,null];
+   }else{
+    next.bases=[false,false,false];
+    next.baseRunners=[null,null,null];
+   }
   }else{
    const firstScore=next.scores.first||0;
    const secondScore=next.scores.second||0;
@@ -1612,16 +1796,20 @@ function calculateNext(g,hits,secret,guess){
    if(next.inning>=next.maxInnings){
     if(firstScore!==secondScore){
      next.bases=[false,false,false];
+     next.baseRunners=[null,null,null];
      next.phase="finished";
      return next;
     }
+
     next.inning++;
     next.half="表";
     next.bases=[true,true,false];
+    next.baseRunners=[null,null,null];
    }else{
     next.inning++;
     next.half="表";
     next.bases=[false,false,false];
+    next.baseRunners=[null,null,null];
    }
   }
  }
@@ -1655,8 +1843,8 @@ async function resolveAtBat(g){
   const snap=await get(secretRef);
   if(!snap.exists())throw new Error("秘密の数字が見つかりません。");
 
-  const secret=String(snap.val().number);
-  const guess=String(g.guess);
+  const secret=String(snap.val().number).padStart(4,"0");
+  const guess=String(g.guess).padStart(4,"0");
   let hits=0;
 
   for(let i=0;i<4;i++){
@@ -1714,6 +1902,7 @@ window.switchPitcher=async()=>{
 window.leaveGame=async()=>{
  if(isSpectator())return;
  if(!confirm("一時退出しますか？"))return;
+
  try{
   await update(ref(database,"rooms/"+currentRoomCode+"/players/"+uid()),{
    active:false,ready:false
@@ -1731,6 +1920,7 @@ window.leaveGame=async()=>{
     const defense=defendingTeam(g);
     changes.pitcherUid=remaining[0]||null;
     changes["pitchers/"+defense]=remaining[0]||null;
+
     if(g.phase==="guess"){
      changes.phase="setup";
      changes.guess=null;
@@ -1771,6 +1961,7 @@ async function restorePlayerToGame(code){
  if(team===defending&&!g.pitcherUid){
   changes.pitcherUid=me;
   changes["pitchers/"+defending]=me;
+
   if(g.phase==="guess"){
    changes.phase="setup";
    changes.guess=null;
@@ -1815,14 +2006,19 @@ window.startRematch=async()=>{
  if(!first.length||!second.length)return;
 
  const initial={
-  inning:1,half:"表",outs:0,
+  inning:1,
+  half:"表",
+  outs:0,
   maxInnings:Number(currentRoom.innings)||9,
   bases:[false,false,false],
+  baseRunners:[null,null,null],
   scores:{first:0,second:0},
   teamHits:{first:0,second:0},
   batterStats:{},
   pitcherStats:{},
-  numberUsage:{},
+  numberUsage:{
+   all:{totalNumbers:0,fourDigit:{},singleDigits:{}}
+  },
   gameLog:[],
   batterTurn:{first:0,second:0},
   batterUid:first[0],
@@ -1831,7 +2027,8 @@ window.startRematch=async()=>{
   phase:"setup",
   atBatNo:1,
   atBatId:"1-表-1-"+Date.now(),
-  guess:null,lastResult:null
+  guess:null,
+  lastResult:null
  };
 
  await set(gameRef(),initial);
@@ -1868,6 +2065,7 @@ function watchChat(){
     );
 
     list.innerHTML="";
+
     for(const t of ["first","second"]){
      if(!teams.includes(t))continue;
      if(t!==team)continue;
@@ -1875,19 +2073,23 @@ function watchChat(){
      for(const [id,m] of entries){
       const div=document.createElement("div");
       div.className="chat-message";
+
       const label=document.createElement("small");
       const sender=currentRoom?.players?.[m.uid]?.name||
        currentRoom?.spectators?.[m.uid]?.name||m.name||"参加者";
       label.textContent=teamLabel(team)+" / "+sender;
+
       const body=document.createElement("div");
       body.textContent=m.text||"";
       div.append(label,body);
       list.appendChild(div);
      }
     }
+
     list.scrollTop=list.scrollHeight;
    }
   );
+
   chatUnsubscribers.push(unsub);
  }
 }
@@ -1915,6 +2117,7 @@ window.sendChat=async()=>{
    text:text.slice(0,300),
    createdAt:Date.now()
   });
+
   $("chatInput").value="";
  }catch(e){
   status("チャット送信エラー："+e.message);
@@ -1957,6 +2160,7 @@ function cpuRandomNumber(difficulty){
  for(let i=0;i<4;i++){
   digits.push(String(Math.floor(Math.random()*10)));
  }
+
  return digits.join("");
 }
 
@@ -1965,6 +2169,7 @@ function cpuGuessNumber(difficulty){
   const patterns=["0000","1111","1234","2222","0123","9999"];
   return patterns[Math.floor(Math.random()*patterns.length)];
  }
+
  return cpuRandomNumber(difficulty);
 }
 
@@ -1982,9 +2187,11 @@ function cpuUserIsBatting(){
 
 function cpuPlaySound(hits){
  if(!$("cpuSoundEnabled").checked)return;
+
  try{
   const AudioCtx=window.AudioContext||window.webkitAudioContext;
   if(!AudioCtx)return;
+
   const ctx=new AudioCtx();
   const patterns={0:[220,160],1:[440],2:[440,660],3:[440,660,880],4:[523,659,784,1047]};
   const notes=patterns[hits]||[330];
@@ -1993,25 +2200,31 @@ function cpuPlaySound(hits){
   notes.forEach((freq,i)=>{
    const osc=ctx.createOscillator();
    const gain=ctx.createGain();
+
    osc.type=hits===0?"triangle":"sine";
    osc.frequency.value=freq;
+
    gain.gain.setValueAtTime(0.0001,start+i*0.12);
    gain.gain.exponentialRampToValueAtTime(0.12,start+i*0.12+0.02);
    gain.gain.exponentialRampToValueAtTime(0.0001,start+i*0.12+0.18);
+
    osc.connect(gain);
    gain.connect(ctx.destination);
    osc.start(start+i*0.12);
    osc.stop(start+i*0.12+0.2);
   });
+
   setTimeout(()=>ctx.close(),1500);
  }catch(e){}
 }
 
 function cpuPlayTransition(type){
  if(!$("cpuSoundEnabled").checked)return;
+
  try{
   const AudioCtx=window.AudioContext||window.webkitAudioContext;
   if(!AudioCtx)return;
+
   const ctx=new AudioCtx();
   const notes=type==="side"?[330,440,660]:[660,523];
   const start=ctx.currentTime;
@@ -2019,22 +2232,27 @@ function cpuPlayTransition(type){
   notes.forEach((freq,i)=>{
    const osc=ctx.createOscillator();
    const gain=ctx.createGain();
+
    osc.type="sine";
    osc.frequency.value=freq;
+
    gain.gain.setValueAtTime(0.0001,start+i*0.13);
    gain.gain.exponentialRampToValueAtTime(0.1,start+i*0.13+0.02);
    gain.gain.exponentialRampToValueAtTime(0.0001,start+i*0.13+0.16);
+
    osc.connect(gain);
    gain.connect(ctx.destination);
    osc.start(start+i*0.13);
    osc.stop(start+i*0.13+0.18);
   });
+
   setTimeout(()=>ctx.close(),1500);
  }catch(e){}
 }
 
 window.startCpuGame=()=>{
  if(cpuTimer)clearTimeout(cpuTimer);
+
  hide("gamePanel");
  hide("cpuFinishedArea");
  hide("cpuWaitingArea");
@@ -2054,19 +2272,24 @@ window.startCpuGame=()=>{
   half:"表",
   outs:0,
   bases:[false,false,false],
+  baseRunners:[null,null,null],
   scores:{first:0,second:0},
   hits:{first:0,second:0},
 
-  /* 打者成績 */
   batterStats:{
    user:{atBats:0,hits:0},
    cpu:{atBats:0,hits:0}
   },
 
-  /* CPU対戦の投手成績 */
   pitcherStats:{
    user:{outs:0,runs:0},
    cpu:{outs:0,runs:0}
+  },
+
+  numberUsage:{
+   totalNumbers:0,
+   fourDigit:{},
+   singleDigits:{}
   },
 
   gameLog:[],
@@ -2079,12 +2302,15 @@ window.startCpuGame=()=>{
 
  $("cpuDifficultyText").textContent=
   "CPUの強さ："+({weak:"弱い",normal:"普通",strong:"強い"}[difficulty]);
+
  $("cpuTeamText").textContent=
-  "あなた："+teamLabel(userTeam)+" / CPU："+teamLabel(userTeam==="first"?"second":"first");
+  "あなた："+teamLabel(userTeam)+
+  " / CPU："+teamLabel(userTeam==="first"?"second":"first");
 
  $("cpuTeamName1").textContent="先攻";
  $("cpuTeamName2").textContent="後攻";
  $("cpuLastResult").textContent="試合開始！";
+
  renderCpuGame();
 };
 
@@ -2110,6 +2336,7 @@ function renderCpuBattingStats(){
   const stat=stats[player.id]||{atBats:0,hits:0};
   const atBats=Number(stat.atBats)||0;
   const hits=Number(stat.hits)||0;
+
   const average=atBats
    ?(hits/atBats).toFixed(3).replace(/^0/,"")
    :"---";
@@ -2170,6 +2397,24 @@ function renderCpuPitchingStats(){
  });
 }
 
+/* CPU数字使用率の表示 */
+function renderCpuNumberUsage(){
+ const area=$("cpuNumberUsageStats");
+ if(!area||!cpuGame)return;
+
+ area.innerHTML="";
+
+ const title=document.createElement("h3");
+ title.textContent="数字の使用率";
+ area.appendChild(title);
+
+ appendNumberUsageSummary(
+  area,
+  cpuGame.numberUsage||{},
+  "全体の数字使用率（打者の予想＋投手の秘密）"
+ );
+}
+
 /* CPU試合履歴の表示 */
 function renderCpuGameLog(){
  const area=$("cpuGameLog");
@@ -2178,7 +2423,7 @@ function renderCpuGameLog(){
  area.innerHTML="";
 
  const title=document.createElement("h3");
- title.textContent="試合履歴";
+ title.textContent="試合履歴・出塁・得点記録";
  area.appendChild(title);
 
  const entries=Array.isArray(cpuGame.gameLog)?cpuGame.gameLog:[];
@@ -2195,15 +2440,20 @@ function renderCpuGameLog(){
   const row=document.createElement("div");
   row.className="game-log-entry";
 
+  const scored=(item.scoredRunners||[])
+   .map(r=>r.name+"（"+r.number+"）")
+   .join("、");
+
   row.textContent=
    (index+1)+"打席目　"+
    item.inning+"回"+item.half+
-   " / "+item.batterName+
+   " / 打者："+item.batterName+
    " / 予想："+item.guess+
    " / 守備："+item.secret+
    " / "+item.label+
-   "（一致 "+item.hits+"個）"+
-   " / 得点："+item.runs;
+   (item.reachedBase?" / 出塁："+item.batterName+"（"+item.guess+"）":"")+
+   " / 得点："+item.runs+
+   (scored?" / 得点者："+scored:"");
 
   area.appendChild(row);
  });
@@ -2219,9 +2469,9 @@ function renderCpuGame(){
  $("cpuHits1").textContent=cpuGame.hits.first;
  $("cpuHits2").textContent=cpuGame.hits.second;
 
- /* 打率・防御率・試合履歴を更新 */
  renderCpuBattingStats();
  renderCpuPitchingStats();
+ renderCpuNumberUsage();
  renderCpuGameLog();
 
  $("cpuInning").textContent=cpuGame.inning>cpuGame.maxInnings
@@ -2242,6 +2492,7 @@ function renderCpuGame(){
 
  if(cpuGame.finished){
   show("cpuFinishedArea");
+
   const userScore=cpuGame.scores[cpuGame.userTeam];
   const cpuTeam=cpuGame.userTeam==="first"?"second":"first";
   const cpuScore=cpuGame.scores[cpuTeam];
@@ -2249,6 +2500,7 @@ function renderCpuGame(){
   $("cpuFinalResult").textContent=
    userScore>cpuScore?"あなたの勝利です！":
    userScore<cpuScore?"CPUの勝利です。":"引き分けです。";
+
   $("cpuTurnInfo").textContent="試合終了";
   return;
  }
@@ -2271,6 +2523,7 @@ window.cpuSubmitDefense=()=>{
  if(!cpuGame||cpuGame.finished||cpuUserIsBatting())return;
 
  const secret=$("cpuDefenseInput").value.trim();
+
  if(!/^\d{4}$/.test(secret)){
   alert("4桁の数字を入力してください。");
   return;
@@ -2279,13 +2532,15 @@ window.cpuSubmitDefense=()=>{
  cpuGame.secret=secret;
  cpuGame.phase="guess";
  $("cpuDefenseInput").value="";
+
  hide("cpuDefenseArea");
  show("cpuWaitingArea");
  $("cpuWaitingArea").textContent="CPUが数字を予想しています...";
 
- renderCpuGame();
+ /* 待機表示を維持してCPUの判定を進める */
  cpuTimer=setTimeout(()=>{
   if(!cpuGame||cpuGame.finished||cpuUserIsBatting())return;
+
   const guess=cpuGuessNumber(cpuGame.difficulty);
   cpuResolveAtBat(guess);
  },900);
@@ -2295,21 +2550,27 @@ window.cpuSubmitGuess=()=>{
  if(!cpuGame||cpuGame.finished||!cpuUserIsBatting())return;
 
  const guess=$("cpuGuessInput").value.trim();
+
  if(!/^\d{4}$/.test(guess)){
   alert("4桁の数字を入力してください。");
   return;
  }
 
  $("cpuGuessInput").value="";
+
  const secret=cpuRandomNumber(cpuGame.difficulty);
  cpuResolveAtBat(guess,secret);
 };
 
+/* CPU対戦の打席処理 */
 function cpuResolveAtBat(guess,secret=null){
  if(!cpuGame||cpuGame.finished)return;
 
  if(secret===null)secret=cpuGame.secret;
  if(!secret)return;
+
+ secret=String(secret).padStart(4,"0");
+ guess=String(guess).padStart(4,"0");
 
  let hits=0;
  for(let i=0;i<4;i++){
@@ -2319,74 +2580,102 @@ function cpuResolveAtBat(guess,secret=null){
  const batting=cpuBattingTeam();
  const defending=cpuDefendingTeam();
 
- /* この打席の打者と投手 */
  const batterId=batting===cpuGame.userTeam?"user":"cpu";
  const pitcherId=defending===cpuGame.userTeam?"user":"cpu";
 
+ const batterName=batterId==="user"?"あなた":"CPU";
+ const pitcherName=pitcherId==="user"?"あなた":"CPU";
+
  const labels=["アウト","ヒット","ツーベース","スリーベース","ホームラン"];
  let runs=0;
+ let scoredRunners=[];
 
- /* この打席開始時点の回・表裏・打席番号を保存 */
  const logInning=cpuGame.inning;
  const logHalf=cpuGame.half;
  const logAtBatNo=cpuGame.atBatNo;
 
  /* 打率の集計 */
- if(!cpuGame.batterStats){
-  cpuGame.batterStats={
-   user:{atBats:0,hits:0},
-   cpu:{atBats:0,hits:0}
-  };
- }
-
  const batterStat=cpuGame.batterStats[batterId]||
   {atBats:0,hits:0};
 
  batterStat.atBats++;
 
- if(hits>0){
-  batterStat.hits++;
- }
+ if(hits>0)batterStat.hits++;
 
  cpuGame.batterStats[batterId]=batterStat;
+
+ /* 打者の予想数字と投手の秘密の数字を集計 */
+ const numbers=[secret,guess];
+
+ for(const number of numbers){
+  cpuGame.numberUsage.totalNumbers++;
+
+  cpuGame.numberUsage.fourDigit[number]=
+   (Number(cpuGame.numberUsage.fourDigit[number])||0)+1;
+
+  for(const digit of number){
+   cpuGame.numberUsage.singleDigits[digit]=
+    (Number(cpuGame.numberUsage.singleDigits[digit])||0)+1;
+  }
+ }
+
+ /* 打者が出塁した場合のランナー情報 */
+ const batterRunner={
+  id:batterId,
+  name:batterName,
+  number:guess
+ };
 
  if(hits===0){
   cpuGame.outs++;
  }else if(hits===4){
-  runs=1+cpuGame.bases.filter(Boolean).length;
+  scoredRunners=cpuGame.baseRunners.filter(Boolean);
+  scoredRunners.push(batterRunner);
+
+  runs=scoredRunners.length;
   cpuGame.bases=[false,false,false];
+  cpuGame.baseRunners=[null,null,null];
  }else{
   const newBases=[false,false,false];
+  const newRunners=[null,null,null];
 
   for(let i=2;i>=0;i--){
-   if(cpuGame.bases[i]){
+   const runner=cpuGame.baseRunners[i];
+
+   if(runner){
     const destination=i+hits;
-    if(destination>=3)runs++;
-    else newBases[destination]=true;
+
+    if(destination>=3){
+     scoredRunners.push(runner);
+    }else{
+     newBases[destination]=true;
+     newRunners[destination]=runner;
+    }
    }
   }
 
-  newBases[hits-1]=true;
+  const batterDestination=hits-1;
+
+  if(batterDestination>=3){
+   scoredRunners.push(batterRunner);
+  }else{
+   newBases[batterDestination]=true;
+   newRunners[batterDestination]=batterRunner;
+  }
+
   cpuGame.bases=newBases;
+  cpuGame.baseRunners=newRunners;
+  runs=scoredRunners.length;
  }
 
  if(hits>0)cpuGame.hits[batting]++;
  if(runs>0)cpuGame.scores[batting]+=runs;
 
  /* 投手別の投球回・失点を集計 */
- if(!cpuGame.pitcherStats){
-  cpuGame.pitcherStats={
-   user:{outs:0,runs:0},
-   cpu:{outs:0,runs:0}
-  };
- }
-
  const pitcherStat=cpuGame.pitcherStats[pitcherId]||
   {outs:0,runs:0};
 
- if(hits===0){
-  pitcherStat.outs++;
- }
+ if(hits===0)pitcherStat.outs++;
 
  pitcherStat.runs+=runs;
  cpuGame.pitcherStats[pitcherId]=pitcherStat;
@@ -2398,13 +2687,15 @@ function cpuResolveAtBat(guess,secret=null){
   inning:logInning,
   half:logHalf,
   atBatNo:logAtBatNo,
-  batterName:batterId==="user"?"あなた":"CPU",
-  pitcherName:pitcherId==="user"?"あなた":"CPU",
-  guess:String(guess),
-  secret:String(secret),
-  hits:hits,
+  batterName,
+  pitcherName,
+  guess,
+  secret,
+  hits,
   label:labels[hits],
-  runs:runs
+  reachedBase:hits>0,
+  runs,
+  scoredRunners
  });
 
  if(cpuGame.gameLog.length>300){
@@ -2415,11 +2706,16 @@ function cpuResolveAtBat(guess,secret=null){
   hits,guess,secret,runs,label:labels[hits]
  };
 
+ const scoredText=scoredRunners.length
+  ?" / 得点者："+scoredRunners.map(r=>r.name+"（"+r.number+"）").join("、")
+  :"";
+
  $("cpuLastResult").textContent=
   labels[hits]+"（一致 "+hits+"個）"+
   " / 予想："+guess+
   " / 守備側："+secret+
-  " / 得点："+runs;
+  " / 得点："+runs+
+  scoredText;
 
  cpuPlaySound(hits);
 
@@ -2433,15 +2729,23 @@ function cpuResolveAtBat(guess,secret=null){
     cpuGame.inning>=cpuGame.maxInnings&&
     cpuGame.scores.second>cpuGame.scores.first
    ){
+    cpuGame.bases=[false,false,false];
+    cpuGame.baseRunners=[null,null,null];
     cpuGame.finished=true;
     renderCpuGame();
     return;
    }
 
    cpuGame.half="裏";
-   cpuGame.bases=cpuGame.inning>cpuGame.maxInnings
-    ?[true,true,false]
-    :[false,false,false];
+
+   if(cpuGame.inning>cpuGame.maxInnings){
+    cpuGame.bases=[true,true,false];
+    cpuGame.baseRunners=[null,null,null];
+   }else{
+    cpuGame.bases=[false,false,false];
+    cpuGame.baseRunners=[null,null,null];
+   }
+
    cpuPlayTransition("side");
   }else{
    const first=cpuGame.scores.first;
@@ -2449,6 +2753,8 @@ function cpuResolveAtBat(guess,secret=null){
 
    if(cpuGame.inning>=cpuGame.maxInnings){
     if(first!==second){
+     cpuGame.bases=[false,false,false];
+     cpuGame.baseRunners=[null,null,null];
      cpuGame.finished=true;
      renderCpuGame();
      return;
@@ -2457,11 +2763,14 @@ function cpuResolveAtBat(guess,secret=null){
     cpuGame.inning++;
     cpuGame.half="表";
     cpuGame.bases=[true,true,false];
+    cpuGame.baseRunners=[null,null,null];
    }else{
     cpuGame.inning++;
     cpuGame.half="表";
     cpuGame.bases=[false,false,false];
+    cpuGame.baseRunners=[null,null,null];
    }
+
    cpuPlayTransition("side");
   }
  }else{
@@ -2472,12 +2781,14 @@ function cpuResolveAtBat(guess,secret=null){
  cpuGame.phase="setup";
 
  renderCpuGame();
-}
+};
 
 window.exitCpuGame=()=>{
  if(cpuTimer)clearTimeout(cpuTimer);
+
  cpuTimer=null;
  cpuGame=null;
+
  hide("cpuGamePanel");
  show("gamePanel");
 };
