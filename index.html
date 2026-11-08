@@ -175,6 +175,23 @@ input,select{
  color:#aab9cc;font-size:11px;margin-top:10px;line-height:1.8
 }
 .sound-setting{font-size:13px;color:#aab9cc;margin:8px 0}
+
+/* 試合履歴 */
+.game-log{
+ background:#142235;border:1px solid #344963;
+ border-radius:10px;padding:12px;margin:10px 0;
+ text-align:left;max-height:320px;overflow-y:auto
+}
+.game-log h3{
+ font-size:15px;margin:0 0 8px;color:#55d6be
+}
+.game-log-entry{
+ padding:9px 0;border-bottom:1px solid #344963;
+ font-size:12px;line-height:1.7;overflow-wrap:anywhere
+}
+.game-log-entry:last-child{border-bottom:0}
+.game-log-empty{color:#aab9cc;font-size:12px}
+
 footer{color:#8294aa;font-size:11px;margin-top:25px}
 </style>
 </head>
@@ -302,6 +319,11 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
  <div>まだ記録はありません。</div>
 </div>
 
+<div id="cpuGameLog" class="game-log">
+ <h3>試合履歴</h3>
+ <div class="game-log-empty">まだ記録はありません。</div>
+</div>
+
 <label class="sound-setting">
 <input id="cpuSoundEnabled" type="checkbox" checked style="width:auto;margin-right:6px">
 効果音 ON
@@ -404,6 +426,11 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 <div id="numberUsageStats" class="number-usage">
  <h3>投手別・数字の使用率</h3>
  <div>まだ記録はありません。</div>
+</div>
+
+<div id="onlineGameLog" class="game-log">
+ <h3>試合履歴</h3>
+ <div class="game-log-empty">まだ記録はありません。</div>
 </div>
 
 <label class="sound-setting"><input id="soundEnabled" type="checkbox" checked style="width:auto;margin-right:6px">効果音 ON</label>
@@ -994,7 +1021,6 @@ window.startGame=async()=>{
   status("部屋主が試合を開始してください。");
   return;
  }
-
  const ids=playerIds(currentRoom);
  const first=teamPlayers(currentRoom,"first",true);
  const second=teamPlayers(currentRoom,"second",true);
@@ -1024,6 +1050,7 @@ window.startGame=async()=>{
   batterStats:{},
   pitcherStats:{},
   numberUsage:{},
+  gameLog:[],
   batterTurn:{first:0,second:0},
   batterUid:first[0],
   pitcherUid:second[0],
@@ -1041,6 +1068,49 @@ window.startGame=async()=>{
 
 function battingTeam(g){return g.half==="表"?"first":"second"}
 function defendingTeam(g){return g.half==="表"?"second":"first"}
+
+/* オンライン試合履歴 */
+function renderOnlineGameLog(g){
+ const area=$("onlineGameLog");
+ if(!area)return;
+
+ area.innerHTML="";
+
+ const title=document.createElement("h3");
+ title.textContent="試合履歴";
+ area.appendChild(title);
+
+ const entries=Array.isArray(g.gameLog)?g.gameLog:[];
+
+ if(!entries.length){
+  const empty=document.createElement("div");
+  empty.className="game-log-empty";
+  empty.textContent="まだ記録はありません。";
+  area.appendChild(empty);
+  return;
+ }
+
+ entries.forEach((item,index)=>{
+  const row=document.createElement("div");
+  row.className="game-log-entry";
+
+  const batter=item.batterName||displayName(item.batterUid);
+
+  row.textContent=
+   (index+1)+"打席目　"+
+   item.inning+"回"+item.half+
+   " / "+batter+
+   " / 予想："+item.guess+
+   " / 守備："+item.secret+
+   " / "+item.label+
+   "（一致 "+item.hits+"個）"+
+   " / 得点："+item.runs;
+
+  area.appendChild(row);
+ });
+
+ area.scrollTop=area.scrollHeight;
+}
 
 /* 投手別・数字使用率の表示 */
 function renderNumberUsage(g){
@@ -1258,6 +1328,7 @@ function renderGame(g){
 
  renderPitchingStats(g);
  renderNumberUsage(g);
+ renderOnlineGameLog(g);
 
  $("inning").textContent=g.inning>g.maxInnings
   ?"延長"+(g.inning-g.maxInnings)+"回"
@@ -1408,7 +1479,8 @@ function calculateNext(g,hits,secret,guess){
   teamHits:{...(g.teamHits||{first:0,second:0})},
   batterStats:{...(g.batterStats||{})},
   pitcherStats:{...(g.pitcherStats||{})},
-  numberUsage:{...(g.numberUsage||{})}
+  numberUsage:{...(g.numberUsage||{})},
+  gameLog:[...(g.gameLog||[])]
  };
 
  const batting=battingTeam(g);
@@ -1471,6 +1543,26 @@ function calculateNext(g,hits,secret,guess){
 
  if(runs>0){
   next.scores[batting]=(next.scores[batting]||0)+runs;
+ }
+
+ /* この打席の履歴を記録 */
+ next.gameLog.push({
+  inning:g.inning,
+  half:g.half,
+  atBatNo:g.atBatNo||1,
+  batterUid:batter,
+  batterName:currentRoom?.players?.[batter]?.name||"名前未設定",
+  pitcherUid:pitcher,
+  pitcherName:currentRoom?.players?.[pitcher]?.name||"名前未設定",
+  guess:String(guess),
+  secret:String(secret),
+  hits:hits,
+  label:labels[hits],
+  runs:runs
+ });
+
+ if(next.gameLog.length>300){
+  next.gameLog=next.gameLog.slice(-300);
  }
 
  /* 投手別の投球回・失点を記録 */
@@ -1731,6 +1823,7 @@ window.startRematch=async()=>{
   batterStats:{},
   pitcherStats:{},
   numberUsage:{},
+  gameLog:[],
   batterTurn:{first:0,second:0},
   batterUid:first[0],
   pitcherUid:second[0],
@@ -1976,6 +2069,7 @@ window.startCpuGame=()=>{
    cpu:{outs:0,runs:0}
   },
 
+  gameLog:[],
   atBatNo:1,
   secret:null,
   lastResult:null,
@@ -2076,6 +2170,47 @@ function renderCpuPitchingStats(){
  });
 }
 
+/* CPU試合履歴の表示 */
+function renderCpuGameLog(){
+ const area=$("cpuGameLog");
+ if(!area||!cpuGame)return;
+
+ area.innerHTML="";
+
+ const title=document.createElement("h3");
+ title.textContent="試合履歴";
+ area.appendChild(title);
+
+ const entries=Array.isArray(cpuGame.gameLog)?cpuGame.gameLog:[];
+
+ if(!entries.length){
+  const empty=document.createElement("div");
+  empty.className="game-log-empty";
+  empty.textContent="まだ記録はありません。";
+  area.appendChild(empty);
+  return;
+ }
+
+ entries.forEach((item,index)=>{
+  const row=document.createElement("div");
+  row.className="game-log-entry";
+
+  row.textContent=
+   (index+1)+"打席目　"+
+   item.inning+"回"+item.half+
+   " / "+item.batterName+
+   " / 予想："+item.guess+
+   " / 守備："+item.secret+
+   " / "+item.label+
+   "（一致 "+item.hits+"個）"+
+   " / 得点："+item.runs;
+
+  area.appendChild(row);
+ });
+
+ area.scrollTop=area.scrollHeight;
+}
+
 function renderCpuGame(){
  if(!cpuGame)return;
 
@@ -2084,9 +2219,10 @@ function renderCpuGame(){
  $("cpuHits1").textContent=cpuGame.hits.first;
  $("cpuHits2").textContent=cpuGame.hits.second;
 
- /* 打率と防御率を同時に更新 */
+ /* 打率・防御率・試合履歴を更新 */
  renderCpuBattingStats();
  renderCpuPitchingStats();
+ renderCpuGameLog();
 
  $("cpuInning").textContent=cpuGame.inning>cpuGame.maxInnings
   ?"延長"+(cpuGame.inning-cpuGame.maxInnings)+"回"
@@ -2190,6 +2326,11 @@ function cpuResolveAtBat(guess,secret=null){
  const labels=["アウト","ヒット","ツーベース","スリーベース","ホームラン"];
  let runs=0;
 
+ /* この打席開始時点の回・表裏・打席番号を保存 */
+ const logInning=cpuGame.inning;
+ const logHalf=cpuGame.half;
+ const logAtBatNo=cpuGame.atBatNo;
+
  /* 打率の集計 */
  if(!cpuGame.batterStats){
   cpuGame.batterStats={
@@ -2249,6 +2390,26 @@ function cpuResolveAtBat(guess,secret=null){
 
  pitcherStat.runs+=runs;
  cpuGame.pitcherStats[pitcherId]=pitcherStat;
+
+ /* CPU試合履歴を記録 */
+ cpuGame.gameLog=cpuGame.gameLog||[];
+
+ cpuGame.gameLog.push({
+  inning:logInning,
+  half:logHalf,
+  atBatNo:logAtBatNo,
+  batterName:batterId==="user"?"あなた":"CPU",
+  pitcherName:pitcherId==="user"?"あなた":"CPU",
+  guess:String(guess),
+  secret:String(secret),
+  hits:hits,
+  label:labels[hits],
+  runs:runs
+ });
+
+ if(cpuGame.gameLog.length>300){
+  cpuGame.gameLog=cpuGame.gameLog.slice(-300);
+ }
 
  cpuGame.lastResult={
   hits,guess,secret,runs,label:labels[hits]
