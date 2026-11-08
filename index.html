@@ -693,6 +693,40 @@ function playResultSound(hitCount,mode="online"){
  if(file)playVoice(file,mode);
 }
 
+/* 入力成功・打者交代を知らせる電子音 */
+let beepAudioContext=null;
+
+async function playBeep(frequency=880,duration=0.12,mode="online"){
+ if(!voiceIsEnabled(mode)||voiceVolume(mode)<=0)return;
+
+ try{
+  const AudioContextClass=window.AudioContext||window.webkitAudioContext;
+  if(!AudioContextClass)return;
+
+  if(!beepAudioContext)beepAudioContext=new AudioContextClass();
+  const context=beepAudioContext;
+
+  if(context.state==="suspended")await context.resume();
+
+  const oscillator=context.createOscillator();
+  const gain=context.createGain();
+  const now=context.currentTime;
+  const volume=voiceVolume(mode);
+
+  oscillator.type="sine";
+  oscillator.frequency.setValueAtTime(frequency,now);
+  gain.gain.setValueAtTime(Math.max(0.001,volume*0.16),now);
+  gain.gain.exponentialRampToValueAtTime(0.001,now+duration);
+
+  oscillator.connect(gain);
+  gain.connect(context.destination);
+  oscillator.start(now);
+  oscillator.stop(now+duration);
+ }catch(e){
+  console.warn("電子音を再生できませんでした：",e);
+ }
+}
+
 /* 攻守交代 */
 function playTransitionSound(type,mode="online"){
  if(type==="side")playVoice("change.wav",mode);
@@ -1726,8 +1760,14 @@ function renderGame(g){
   lastObservedBatterUid=g.batterUid||null;
   lastObservedAtBatNo=g.atBatNo;
  }else if(g.atBatId&&g.atBatId!==lastObservedAtBatId){
+  const batterChanged=(g.batterUid||null)!==lastObservedBatterUid;
+
   if(g.half!==lastObservedHalf){
    playTransitionSound("side","online");
+  }
+
+  if(batterChanged){
+   playBeep(660,0.10,"online");
   }
 
   lastObservedAtBatId=g.atBatId;
@@ -1912,6 +1952,7 @@ window.submitGuess=async()=>{
   }
 
   $("guessInput").value="";
+  playBeep(880,0.12,"online");
   status("予想を送信しました。");
  }catch(e){
   status("予想エラー："+e.message);
@@ -2667,14 +2708,7 @@ window.startCpuGame=()=>{
   },
 
   numberUsage:{
-   user:{
-    pitches:emptyNumberUsage(),
-    guesses:emptyNumberUsage()
-   },
-   cpu:{
-    pitches:emptyNumberUsage(),
-    guesses:emptyNumberUsage()
-   }
+   players:{}
   },
 
   gameLog:[],
@@ -2799,7 +2833,7 @@ function renderCpuNumberUsage(){
  ];
 
  players.forEach(player=>{
-  const usage=cpuGame.numberUsage?.[player.id]||{};
+  const usage=cpuGame.numberUsage?.players?.[player.id]||{};
 
   const section=document.createElement("div");
   section.className="number-player";
@@ -2976,6 +3010,7 @@ window.cpuSubmitGuess=()=>{
  }
 
  $("cpuGuessInput").value="";
+ playBeep(880,0.12,"cpu");
 
  const secret=cpuRandomNumber(cpuGame.difficulty);
  cpuResolveAtBat(guess,secret);
@@ -3197,6 +3232,7 @@ function cpuResolveAtBat(guess,secret=null){
    }
 
    cpuPlayTransition("side");
+   playBeep(660,0.10,"cpu");
   }else{
    const first=cpuGame.scores.first;
    const second=cpuGame.scores.second;
@@ -3229,9 +3265,11 @@ function cpuResolveAtBat(guess,secret=null){
    }
 
    cpuPlayTransition("side");
+   playBeep(660,0.10,"cpu");
   }
  }else{
-  /* 打者交代用の専用音声は用意されていないため無音 */
+  /* 同じイニング内で次の打者に交代 */
+  playBeep(660,0.10,"cpu");
  }
 
  cpuGame.secret=null;
