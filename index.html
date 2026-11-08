@@ -42,6 +42,10 @@ input,select{
  background:#142235;border:1px solid #52677f;
  color:white;text-align:center
 }
+input[type=range]{
+ width:100%;padding:0;margin:8px 0;
+ accent-color:#35c9ad
+}
 .status{
  margin-top:10px;padding:12px;border-radius:9px;
  background:#142235;color:#f4d58b;font-size:13px;
@@ -196,6 +200,10 @@ input,select{
  color:#aab9cc;font-size:11px;margin-top:10px;line-height:1.8
 }
 .sound-setting{font-size:13px;color:#aab9cc;margin:8px 0}
+.sound-volume-label{
+ display:flex;justify-content:space-between;gap:10px;
+ color:#aab9cc;font-size:12px;margin-top:7px
+}
 
 /* 試合履歴 */
 .game-log{
@@ -374,7 +382,6 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 
 <div id="cpuLastResult" class="result">試合開始前です。</div>
 
-<!-- 数字入力欄を直近の打席結果の直後に配置 -->
 <div id="cpuDefenseArea" class="hidden">
 <h2>ピッチャー：秘密の数字</h2>
 <p class="note">今回の打席で守る4桁の数字を入力してください。</p>
@@ -413,10 +420,14 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 
 <label class="sound-setting">
 <input id="cpuSoundEnabled" type="checkbox" checked style="width:auto;margin-right:6px">
-効果音 ON
+ずんだもんボイス ON
 </label>
+<div class="sound-volume-label">
+ <span>CPU戦ボイス音量</span>
+ <strong id="cpuSoundVolumeText">80%</strong>
+</div>
+<input id="cpuSoundVolume" type="range" min="0" max="100" value="80">
 
-<!-- 数字使用率は成績・試合履歴の最後に表示 -->
 <div id="cpuNumberUsageStats" class="number-usage">
  <h3>プレイヤー別・数字の使用率</h3>
  <div>まだ記録はありません。</div>
@@ -490,7 +501,6 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 
 <div id="lastResult" class="result">まだ打席はありません。</div>
 
-<!-- 数字入力欄を直近の打席結果の直後に配置 -->
 <div id="defenseArea" class="hidden">
 <h2>ピッチャー：秘密の数字</h2>
 <p class="note">今回の打席で守る4桁の数字を入力してください。</p>
@@ -535,10 +545,14 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 
 <label class="sound-setting">
 <input id="soundEnabled" type="checkbox" checked style="width:auto;margin-right:6px">
-効果音 ON
+ずんだもんボイス ON
 </label>
+<div class="sound-volume-label">
+ <span>オンライン戦ボイス音量</span>
+ <strong id="soundVolumeText">80%</strong>
+</div>
+<input id="soundVolume" type="range" min="0" max="100" value="80">
 
-<!-- 数字使用率は成績・試合履歴の最後に表示 -->
 <div id="numberUsageStats" class="number-usage">
  <h3>プレイヤー別・数字の使用率</h3>
  <div>まだ記録はありません。</div>
@@ -599,11 +613,98 @@ let chatUnsubscribers=[];
 let resolvingId=null;
 let lastGameWasFinished=false;
 let lastSoundResultId=null;
-let audioContext=null;
 let lastObservedAtBatId=null;
 let lastObservedHalf=null;
 let lastObservedBatterUid=null;
 let lastObservedAtBatNo=null;
+
+/* ==========================
+   ずんだもんボイス共通処理
+========================== */
+
+let voiceQueue=Promise.resolve();
+
+function voiceIsEnabled(mode){
+ const id=mode==="cpu"?"cpuSoundEnabled":"soundEnabled";
+ return !!$(id)?.checked;
+}
+
+function voiceVolume(mode){
+ const id=mode==="cpu"?"cpuSoundVolume":"soundVolume";
+ const value=Number($(id)?.value??80);
+ return Math.max(0,Math.min(1,value/100));
+}
+
+/* WAVファイルを順番に再生する */
+function playVoice(file,mode="online"){
+ if(!voiceIsEnabled(mode)||voiceVolume(mode)<=0)return voiceQueue;
+
+ voiceQueue=voiceQueue.then(()=>new Promise(resolve=>{
+  if(!voiceIsEnabled(mode)||voiceVolume(mode)<=0){
+   resolve();
+   return;
+  }
+
+  const audio=new Audio("./"+file);
+  audio.volume=voiceVolume(mode);
+
+  let finished=false;
+  const finish=()=>{
+   if(finished)return;
+   finished=true;
+   resolve();
+  };
+
+  audio.addEventListener("ended",finish,{once:true});
+  audio.addEventListener("error",finish,{once:true});
+
+  const result=audio.play();
+  if(result&&typeof result.catch==="function"){
+   result.catch(()=>{
+    console.warn("音声を再生できませんでした："+file);
+    finish();
+   });
+  }
+ }));
+
+ return voiceQueue;
+}
+
+/* 複数の音声を順番に再生する */
+function playVoiceSequence(files,mode="online"){
+ let sequence=voiceQueue;
+ for(const file of files){
+  sequence=sequence.then(()=>playVoice(file,mode));
+ }
+ voiceQueue=sequence;
+ return voiceQueue;
+}
+
+/* 打席結果：一致数0〜4に対応 */
+function playResultSound(hitCount,mode="online"){
+ const files=[
+  "out.wav",
+  "hit.wav",
+  "double.wav",
+  "triple.wav",
+  "homerun.wav"
+ ];
+ const file=files[Number(hitCount)];
+ if(file)playVoice(file,mode);
+}
+
+/* 攻守交代 */
+function playTransitionSound(type,mode="online"){
+ if(type==="side")playVoice("change.wav",mode);
+}
+
+/* 音量表示 */
+$("soundVolume")?.addEventListener("input",()=>{
+ $("soundVolumeText").textContent=$("soundVolume").value+"%";
+});
+$("cpuSoundVolume")?.addEventListener("input",()=>{
+ $("cpuSoundVolumeText").textContent=$("cpuSoundVolume").value+"%";
+});
 
 function uid(){return auth.currentUser?.uid||null;}
 
@@ -770,52 +871,6 @@ function appendLogResult(row,item){
  }
 }
 
-function playResultSound(hitCount){
- if(!$("soundEnabled")?.checked)return;
- try{
-  const AudioCtx=window.AudioContext||window.webkitAudioContext;
-  if(!AudioCtx)return;
-  audioContext=audioContext||new AudioCtx();
-  if(audioContext.state==="suspended")audioContext.resume();
-  const patterns={0:[220,160],1:[440],2:[440,660],3:[440,660,880],4:[523,659,784,1047]};
-  const notes=patterns[hitCount]||[330],start=audioContext.currentTime;
-  notes.forEach((freq,i)=>{
-   const osc=audioContext.createOscillator(),gain=audioContext.createGain();
-   osc.type=hitCount===0?"triangle":"sine";osc.frequency.value=freq;
-   gain.gain.setValueAtTime(0.0001,start+i*0.12);
-   gain.gain.exponentialRampToValueAtTime(0.16,start+i*0.12+0.02);
-   gain.gain.exponentialRampToValueAtTime(0.0001,start+i*0.12+0.18);
-   osc.connect(gain);gain.connect(audioContext.destination);
-   osc.start(start+i*0.12);osc.stop(start+i*0.12+0.2);
-  });
- }catch(e){console.warn("効果音を再生できませんでした",e);}
-}
-
-function playTransitionSound(type){
- if(!$("soundEnabled")?.checked)return;
- try{
-  const AudioCtx=window.AudioContext||window.webkitAudioContext;
-  if(!AudioCtx)return;
-  audioContext=audioContext||new AudioCtx();
-  if(audioContext.state==="suspended")audioContext.resume();
-  const patterns=type==="side"?[330,440,660]:[660,523];
-  const start=audioContext.currentTime;
-  patterns.forEach((freq,i)=>{
-   const osc=audioContext.createOscillator();
-   const gain=audioContext.createGain();
-   osc.type="sine";
-   osc.frequency.value=freq;
-   gain.gain.setValueAtTime(0.0001,start+i*0.13);
-   gain.gain.exponentialRampToValueAtTime(0.12,start+i*0.13+0.02);
-   gain.gain.exponentialRampToValueAtTime(0.0001,start+i*0.13+0.16);
-   osc.connect(gain);
-   gain.connect(audioContext.destination);
-   osc.start(start+i*0.13);
-   osc.stop(start+i*0.13+0.18);
-  });
- }catch(e){console.warn("交代音を再生できませんでした",e);}
-}
-
 const roomRef=()=>ref(database,"rooms/"+currentRoomCode);
 const gameRef=()=>ref(database,"gameStates/"+currentRoomCode);
 
@@ -889,6 +944,11 @@ function watchRoom(code,role){
  lastObservedAtBatNo=null;
  lastSoundResultId=null;
 
+ /* 音声の重複再生防止用状態をリセット */
+ lastObservedScores=null;
+ lastExtraAnnounced=false;
+ lastFinishedAnnouncementKey=null;
+
  show("gamePanel");
  $("roleTitle").textContent=role==="player"?"プレイヤー画面":"観戦者画面";
  $("roomCodeText").textContent="部屋コード："+code;
@@ -952,6 +1012,7 @@ function watchGame(){
    resolveAtBat(game);
   }
  });
+
 }
 
 function renderLobby(){
@@ -995,7 +1056,6 @@ function renderLobby(){
    (id===currentRoom.hostUid?" / 部屋主":"");
   list.appendChild(div);
  }
-
  const first=teamPlayers(currentRoom,"first").length;
  const second=teamPlayers(currentRoom,"second").length;
  const cap1=teamCapacity(currentRoom,"first");
@@ -1244,6 +1304,17 @@ window.startGame=async()=>{
   status("試合データが残っています。");
   return;
  }
+
+ /* 新しい試合の音声判定状態を初期化 */
+ lastObservedAtBatId=null;
+ lastObservedHalf=null;
+ lastObservedBatterUid=null;
+ lastObservedAtBatNo=null;
+ lastSoundResultId=null;
+ lastObservedScores=null;
+ lastExtraAnnounced=false;
+ lastFinishedAnnouncementKey=null;
+
  const initial={
   inning:1,
   half:"表",
@@ -1492,7 +1563,6 @@ function renderNumberUsage(g){
  }
 
  ids.forEach(playerId=>{
-  const player=currentRoom?.players?.[playerId]||{};
   const usage=playersUsage[playerId]||{};
 
   const section=document.createElement("div");
@@ -1563,11 +1633,86 @@ function renderPitchingStats(g){
  }
 }
 
+/* 音声判定用の状態 */
+let lastObservedScores=null;
+let lastExtraAnnounced=false;
+let lastFinishedAnnouncementKey=null;
+
+/* スコア変化を見て同点・逆転を読み上げる */
+function announceOnlineScoreChange(scores){
+ const current={
+  first:Number(scores?.first)||0,
+  second:Number(scores?.second)||0
+ };
+
+ if(lastObservedScores===null){
+  lastObservedScores=current;
+  return;
+ }
+
+ const previous=lastObservedScores;
+ lastObservedScores=current;
+
+ const wasTied=previous.first===previous.second;
+ const isTied=current.first===current.second;
+
+ if(!wasTied&&isTied){
+  playVoice("tie.wav","online");
+  return;
+ }
+
+ const firstComeback=
+  previous.first<previous.second&&current.first>current.second;
+ const secondComeback=
+  previous.second<previous.first&&current.second>current.first;
+
+ if(firstComeback||secondComeback){
+  playVoice("comeback.wav","online");
+ }
+}
+
+function announceOnlineGameFinished(g){
+ const key=g.atBatId||
+  String(g.inning)+"-"+String(g.half)+"-"+
+  String(g.scores?.first)+"-"+String(g.scores?.second);
+
+ if(lastFinishedAnnouncementKey===key)return;
+ lastFinishedAnnouncementKey=key;
+
+ const first=Number(g.scores?.first)||0;
+ const second=Number(g.scores?.second)||0;
+
+ if(first>second){
+  playVoiceSequence(["game-set.wav","first-win.wav"],"online");
+ }else if(second>first){
+  playVoiceSequence(["game-set.wav","second-win.wav"],"online");
+ }else{
+  playVoice("game-set.wav","online");
+ }
+}
+
 function renderGame(g){
  const me=uid();
  const batting=battingTeam(g);
  const defending=defendingTeam(g);
 
+ const firstRender=lastObservedScores===null;
+
+ /* スコアの変化を検出 */
+ announceOnlineScoreChange(g.scores);
+
+ /* 延長戦開始は最初の1回だけ読み上げる */
+ if(firstRender){
+  lastExtraAnnounced=Number(g.inning)>Number(g.maxInnings);
+ }else if(
+  Number(g.inning)>Number(g.maxInnings)&&
+  !lastExtraAnnounced
+ ){
+  lastExtraAnnounced=true;
+  playVoice("extra.wav","online");
+ }
+
+ /* 打席番号が変わった場合の攻守交代音声 */
  if(lastObservedAtBatId===null){
   lastObservedAtBatId=g.atBatId||null;
   lastObservedHalf=g.half;
@@ -1575,10 +1720,9 @@ function renderGame(g){
   lastObservedAtBatNo=g.atBatNo;
  }else if(g.atBatId&&g.atBatId!==lastObservedAtBatId){
   if(g.half!==lastObservedHalf){
-   playTransitionSound("side");
-  }else if(g.atBatNo!==lastObservedAtBatNo){
-   playTransitionSound("batter");
+   playTransitionSound("side","online");
   }
+
   lastObservedAtBatId=g.atBatId;
   lastObservedHalf=g.half;
   lastObservedBatterUid=g.batterUid||null;
@@ -1595,11 +1739,20 @@ function renderGame(g){
   const members=teamPlayers(currentRoom,team);
   members.forEach((id,index)=>{
    const st=g.batterStats?.[id]||{atBats:0,hits:0};
-   const avg=st.atBats?(st.hits/st.atBats).toFixed(3).replace(/^0/,""):"---";
-   statRows.push('<div class="batting-row"><span>'+teamLabel(team)+' '+(index+1)+'</span><strong>'+avg+'（'+st.hits+'安打/'+st.atBats+'打数）</strong></div>');
+   const atBats=Number(st.atBats)||0;
+   const hits=Number(st.hits)||0;
+   const avg=atBats?(hits/atBats).toFixed(3).replace(/^0/,""):"---";
+   statRows.push(
+    '<div class="batting-row"><span>'+
+    teamLabel(team)+' '+(index+1)+
+    '：'+cleanPlayerName(currentRoom?.players?.[id]?.name||"名前未設定")+
+    '</span><strong>'+avg+'（'+hits+'安打/'+atBats+'打数）</strong></div>'
+   );
   });
  }
- $("battingStats").innerHTML="<h3>打率・打席成績</h3>"+(statRows.join("")||"<div>まだ記録はありません。</div>");
+ $("battingStats").innerHTML=
+  "<h3>打率・打席成績</h3>"+
+  (statRows.join("")||"<div>まだ記録はありません。</div>");
 
  renderPitchingStats(g);
  renderOnlineGameLog(g);
@@ -1619,14 +1772,19 @@ function renderGame(g){
   "バッター："+displayName(g.batterUid)+
   " / ピッチャー："+displayName(g.pitcherUid);
 
- if(!g.lastResult&&lastSoundResultId===null)lastSoundResultId=g.atBatId;
+ /* 新しい打席結果だけ音声を再生 */
+ if(!g.lastResult&&lastSoundResultId===null){
+  lastSoundResultId=g.atBatId||null;
+ }
 
  if(g.lastResult){
   const resultId=g.lastResult.id||g.atBatId;
-  if(lastSoundResultId===null)lastSoundResultId=resultId;
-  else if(lastSoundResultId!==resultId){
+
+  if(lastSoundResultId===null){
    lastSoundResultId=resultId;
-   playResultSound(g.lastResult.hits);
+  }else if(lastSoundResultId!==resultId){
+   lastSoundResultId=resultId;
+   playResultSound(g.lastResult.hits,"online");
   }
 
   renderPlayResult($("lastResult"),g.lastResult);
@@ -1648,6 +1806,15 @@ function renderGame(g){
   const b=g.scores.second||0;
   $("finalResult").textContent=
    a===b?"引き分けです。":(a>b?"先攻":"後攻")+"の勝利です。";
+
+  /* 最初に試合終了画面を読み込んだ場合は再生せず、
+     試合中から終了に変化した場合だけ読み上げる */
+  if(!firstRender){
+   announceOnlineGameFinished(g);
+  }else{
+   lastFinishedAnnouncementKey=g.atBatId||
+    String(g.inning)+"-"+String(g.half)+"-"+a+"-"+b;
+  }
 
   $("rematchButton").classList.toggle("hidden",uid()!==currentRoom.hostUid);
   $("reorganizeButton").classList.toggle("hidden",uid()!==currentRoom.hostUid);
@@ -2107,7 +2274,6 @@ window.leaveGame=async()=>{
   status("退出エラー："+e.message);
  }
 };
-
 async function restorePlayerToGame(code){
  const [roomSnap,gameSnap]=await Promise.all([
   get(ref(database,"rooms/"+code)),
@@ -2144,7 +2310,7 @@ async function restorePlayerToGame(code){
  if(Object.keys(changes).length){
   await update(ref(database,"gameStates/"+code),changes);
  }
-};
+}
 
 window.rejoinGame=async()=>{
  try{
@@ -2174,6 +2340,16 @@ window.startRematch=async()=>{
  const second=teamPlayers(currentRoom,"second",true);
 
  if(!first.length||!second.length)return;
+
+ /* 再戦時に音声の重複防止状態を初期化 */
+ lastObservedAtBatId=null;
+ lastObservedHalf=null;
+ lastObservedBatterUid=null;
+ lastObservedAtBatNo=null;
+ lastSoundResultId=null;
+ lastObservedScores=null;
+ lastExtraAnnounced=false;
+ lastFinishedAnnouncementKey=null;
 
  const initial={
   inning:1,
@@ -2310,6 +2486,8 @@ window.copyRoomCode=async()=>{
 
 let cpuGame=null;
 let cpuTimer=null;
+let cpuExtraAnnounced=false;
+let cpuFinishedAnnounced=false;
 
 function cpuRandomNumber(difficulty){
  let digits=[];
@@ -2343,6 +2521,7 @@ function cpuGuessNumber(difficulty){
 
  return cpuRandomNumber(difficulty);
 }
+
 function cpuBattingTeam(){
  return cpuGame.half==="表"?"first":"second";
 }
@@ -2355,73 +2534,74 @@ function cpuUserIsBatting(){
  return cpuBattingTeam()===cpuGame.userTeam;
 }
 
+/* CPU戦の打席結果音声 */
 function cpuPlaySound(hits){
- if(!$("cpuSoundEnabled").checked)return;
-
- try{
-  const AudioCtx=window.AudioContext||window.webkitAudioContext;
-  if(!AudioCtx)return;
-
-  const ctx=new AudioCtx();
-  const patterns={0:[220,160],1:[440],2:[440,660],3:[440,660,880],4:[523,659,784,1047]};
-  const notes=patterns[hits]||[330];
-  const start=ctx.currentTime;
-
-  notes.forEach((freq,i)=>{
-   const osc=ctx.createOscillator();
-   const gain=ctx.createGain();
-
-   osc.type=hits===0?"triangle":"sine";
-   osc.frequency.value=freq;
-
-   gain.gain.setValueAtTime(0.0001,start+i*0.12);
-   gain.gain.exponentialRampToValueAtTime(0.12,start+i*0.12+0.02);
-   gain.gain.exponentialRampToValueAtTime(0.0001,start+i*0.12+0.18);
-
-   osc.connect(gain);
-   gain.connect(ctx.destination);
-   osc.start(start+i*0.12);
-   osc.stop(start+i*0.12+0.2);
-  });
-
-  setTimeout(()=>ctx.close(),1500);
- }catch(e){}
+ playResultSound(hits,"cpu");
 }
 
+/* CPU戦の攻守交代音声 */
 function cpuPlayTransition(type){
- if(!$("cpuSoundEnabled").checked)return;
+ if(type==="side")playTransitionSound("side","cpu");
+}
 
- try{
-  const AudioCtx=window.AudioContext||window.webkitAudioContext;
-  if(!AudioCtx)return;
+/* CPU戦の同点・逆転読み上げ */
+function cpuAnnounceScoreChange(before,after){
+ const beforeFirst=Number(before.first)||0;
+ const beforeSecond=Number(before.second)||0;
+ const afterFirst=Number(after.first)||0;
+ const afterSecond=Number(after.second)||0;
 
-  const ctx=new AudioCtx();
-  const notes=type==="side"?[330,440,660]:[660,523];
-  const start=ctx.currentTime;
+ const wasTied=beforeFirst===beforeSecond;
+ const isTied=afterFirst===afterSecond;
 
-  notes.forEach((freq,i)=>{
-   const osc=ctx.createOscillator();
-   const gain=ctx.createGain();
+ if(!wasTied&&isTied){
+  playVoice("tie.wav","cpu");
+  return;
+ }
 
-   osc.type="sine";
-   osc.frequency.value=freq;
+ const firstComeback=
+  beforeFirst<beforeSecond&&afterFirst>afterSecond;
+ const secondComeback=
+  beforeSecond<beforeFirst&&afterSecond>afterFirst;
 
-   gain.gain.setValueAtTime(0.0001,start+i*0.13);
-   gain.gain.exponentialRampToValueAtTime(0.1,start+i*0.13+0.02);
-   gain.gain.exponentialRampToValueAtTime(0.0001,start+i*0.13+0.16);
+ if(firstComeback||secondComeback){
+  playVoice("comeback.wav","cpu");
+ }
+}
 
-   osc.connect(gain);
-   gain.connect(ctx.destination);
-   osc.start(start+i*0.13);
-   osc.stop(start+i*0.13+0.18);
-  });
+/* CPU戦の試合終了音声 */
+function cpuFinishGame(){
+ if(!cpuGame||cpuGame.finished)return;
 
-  setTimeout(()=>ctx.close(),1500);
- }catch(e){}
+ cpuGame.finished=true;
+ cpuGame.phase="finished";
+ cpuGame.secret=null;
+
+ if(!cpuFinishedAnnounced){
+  cpuFinishedAnnounced=true;
+
+  const userScore=Number(cpuGame.scores[cpuGame.userTeam])||0;
+  const cpuTeam=cpuGame.userTeam==="first"?"second":"first";
+  const cpuScore=Number(cpuGame.scores[cpuTeam])||0;
+
+  if(userScore>cpuScore){
+   playVoiceSequence(["game-set.wav","you-win.wav"],"cpu");
+  }else if(userScore<cpuScore){
+   playVoiceSequence(["game-set.wav","cpu-win.wav"],"cpu");
+  }else{
+   playVoice("game-set.wav","cpu");
+  }
+ }
+
+ renderCpuGame();
 }
 
 window.startCpuGame=()=>{
  if(cpuTimer)clearTimeout(cpuTimer);
+
+ cpuTimer=null;
+ cpuExtraAnnounced=false;
+ cpuFinishedAnnounced=false;
 
  hide("gamePanel");
  hide("cpuFinishedArea");
@@ -2886,6 +3066,9 @@ function cpuResolveAtBat(guess,secret=null){
  if(hits>0)cpuGame.hits[batting]++;
  if(runs>0)cpuGame.scores[batting]+=runs;
 
+ /* スコア変化から同点・逆転を読み上げる */
+ cpuAnnounceScoreChange(scoresBefore,cpuGame.scores);
+
  /* 特別な打撃結果を判定 */
  const playTags=classifyPlay({
   hits,
@@ -2942,6 +3125,7 @@ function cpuResolveAtBat(guess,secret=null){
 
  renderPlayResult($("cpuLastResult"),cpuGame.lastResult);
 
+ /* 打席結果の音声 */
  cpuPlaySound(hits);
 
  cpuGame.atBatNo++;
@@ -2954,10 +3138,7 @@ function cpuResolveAtBat(guess,secret=null){
  ){
   cpuGame.bases=[false,false,false];
   cpuGame.baseRunners=[null,null,null];
-  cpuGame.finished=true;
-  cpuGame.phase="finished";
-  cpuGame.secret=null;
-  renderCpuGame();
+  cpuFinishGame();
   return;
  }
 
@@ -2971,10 +3152,7 @@ function cpuResolveAtBat(guess,secret=null){
    ){
     cpuGame.bases=[false,false,false];
     cpuGame.baseRunners=[null,null,null];
-    cpuGame.finished=true;
-    cpuGame.phase="finished";
-    cpuGame.secret=null;
-    renderCpuGame();
+    cpuFinishGame();
     return;
    }
 
@@ -2998,18 +3176,21 @@ function cpuResolveAtBat(guess,secret=null){
     if(first!==second){
      cpuGame.bases=[false,false,false];
      cpuGame.baseRunners=[null,null,null];
-     cpuGame.finished=true;
-     cpuGame.phase="finished";
-     cpuGame.secret=null;
-     renderCpuGame();
+     cpuFinishGame();
      return;
     }
 
+    /* 規定回終了時に同点なら延長戦へ */
     cpuGame.inning++;
     cpuGame.half="表";
     cpuGame.halfAtBats=0;
     cpuGame.bases=[true,true,false];
     cpuGame.baseRunners=[null,null,null];
+
+    if(!cpuExtraAnnounced){
+     cpuExtraAnnounced=true;
+     playVoice("extra.wav","cpu");
+    }
    }else{
     cpuGame.inning++;
     cpuGame.half="表";
@@ -3021,19 +3202,22 @@ function cpuResolveAtBat(guess,secret=null){
    cpuPlayTransition("side");
   }
  }else{
-  cpuPlayTransition("batter");
+  /* 打者交代用の専用音声は用意されていないため無音 */
  }
 
  cpuGame.secret=null;
  cpuGame.phase="setup";
 
  renderCpuGame();
-};
+}
+
 window.exitCpuGame=()=>{
  if(cpuTimer)clearTimeout(cpuTimer);
 
  cpuTimer=null;
  cpuGame=null;
+ cpuExtraAnnounced=false;
+ cpuFinishedAnnounced=false;
 
  hide("cpuGamePanel");
  show("gamePanel");
