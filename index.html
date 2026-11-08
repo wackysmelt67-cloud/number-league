@@ -622,9 +622,21 @@ let lastObservedAtBatNo=null;
    ずんだもんボイス共通処理
 ========================== */
 
-/* WAVファイルを順番に再生する */
 let voiceQueue=Promise.resolve();
 
+/* 音声設定を取得 */
+function voiceIsEnabled(mode){
+ const id=mode==="cpu"?"cpuSoundEnabled":"soundEnabled";
+ return !!$(id)?.checked;
+}
+
+function voiceVolume(mode){
+ const id=mode==="cpu"?"cpuSoundVolume":"soundVolume";
+ const value=Number($(id)?.value??80);
+ return Math.max(0,Math.min(1,value/100));
+}
+
+/* WAVファイルを順番に再生する */
 function playVoice(file,mode="online"){
  if(!voiceIsEnabled(mode)||voiceVolume(mode)<=0)return voiceQueue;
 
@@ -917,6 +929,15 @@ function isSpectator(){
  return currentRole==="spectator";
 }
 
+/* 延長戦の自動ランナーを作成 */
+function createTiebreakRunners(){
+ return [
+  {uid:null,name:"タイブレーク走者",number:"----"},
+  {uid:null,name:"タイブレーク走者",number:"----"},
+  null
+ ];
+}
+
 function watchRoom(code,role){
  if(roomUnsubscribe)roomUnsubscribe();
  if(gameUnsubscribe)gameUnsubscribe();
@@ -1000,9 +1021,7 @@ function watchGame(){
    resolveAtBat(game);
   }
  });
-
 }
-
 function renderLobby(){
  if(!currentRoom)return;
 
@@ -1898,7 +1917,6 @@ window.submitGuess=async()=>{
   status("予想エラー："+e.message);
  }
 };
-
 /* オンラインの打席処理 */
 function calculateNext(g,hits,secret,guess){
  const next={
@@ -2107,7 +2125,7 @@ function calculateNext(g,hits,secret,guess){
 
    if(next.inning>next.maxInnings){
     next.bases=[true,true,false];
-    next.baseRunners=[null,null,null];
+    next.baseRunners=createTiebreakRunners();
    }else{
     next.bases=[false,false,false];
     next.baseRunners=[null,null,null];
@@ -2128,7 +2146,7 @@ function calculateNext(g,hits,secret,guess){
     next.half="表";
     next.halfAtBats=0;
     next.bases=[true,true,false];
-    next.baseRunners=[null,null,null];
+    next.baseRunners=createTiebreakRunners();
    }else{
     next.inning++;
     next.half="表";
@@ -2262,6 +2280,7 @@ window.leaveGame=async()=>{
   status("退出エラー："+e.message);
  }
 };
+
 async function restorePlayerToGame(code){
  const [roomSnap,gameSnap]=await Promise.all([
   get(ref(database,"rooms/"+code)),
@@ -2379,49 +2398,71 @@ window.reorganizeTeams=async()=>{
  lastGameWasFinished=true;
  status("チームを再編成できます。全員が再度準備完了してください。");
 };
-
+/* チャット：観戦者は先攻・後攻の両方を同時に閲覧 */
 function watchChat(){
  chatUnsubscribers.forEach(fn=>fn());
  chatUnsubscribers=[];
 
  if(!currentRoom)return;
 
- const teams=isSpectator()?["first","second"]:[myPlayer()?.team].filter(Boolean);
+ const teams=isSpectator()
+  ?["first","second"]
+  :[myPlayer()?.team].filter(Boolean);
+
  const list=$("chatList");
  list.innerHTML="";
+
+ const cached={
+  first:{},
+  second:{}
+ };
+
+ function render(){
+  list.innerHTML="";
+
+  const all=[];
+
+  for(const team of teams){
+   for(const [id,message] of Object.entries(cached[team]||{})){
+    all.push({
+     team,
+     id,
+     message
+    });
+   }
+  }
+
+  all.sort((a,b)=>
+   (a.message.createdAt||0)-(b.message.createdAt||0)
+  );
+
+  for(const item of all){
+   const div=document.createElement("div");
+   div.className="chat-message";
+
+   const label=document.createElement("small");
+   const sender=currentRoom?.players?.[item.message.uid]?.name||
+    currentRoom?.spectators?.[item.message.uid]?.name||
+    item.message.name||"参加者";
+
+   label.textContent=teamLabel(item.team)+" / "+sender;
+
+   const body=document.createElement("div");
+   body.textContent=item.message.text||"";
+
+   div.append(label,body);
+   list.appendChild(div);
+  }
+
+  list.scrollTop=list.scrollHeight;
+ }
 
  for(const team of teams){
   const unsub=onValue(
    ref(database,"teamChats/"+currentRoomCode+"/"+team),
    snap=>{
-    const messages=snap.val()||{};
-    const entries=Object.entries(messages).sort((a,b)=>
-     (a[1].createdAt||0)-(b[1].createdAt||0)
-    );
-
-    list.innerHTML="";
-
-    for(const t of ["first","second"]){
-     if(!teams.includes(t))continue;
-     if(t!==team)continue;
-
-     for(const [id,m] of entries){
-      const div=document.createElement("div");
-      div.className="chat-message";
-
-      const label=document.createElement("small");
-      const sender=currentRoom?.players?.[m.uid]?.name||
-       currentRoom?.spectators?.[m.uid]?.name||m.name||"参加者";
-      label.textContent=teamLabel(team)+" / "+sender;
-
-      const body=document.createElement("div");
-      body.textContent=m.text||"";
-      div.append(label,body);
-      list.appendChild(div);
-     }
-    }
-
-    list.scrollTop=list.scrollHeight;
+    cached[team]=snap.val()||{};
+    render();
    }
   );
 
@@ -3149,7 +3190,7 @@ function cpuResolveAtBat(guess,secret=null){
 
    if(cpuGame.inning>cpuGame.maxInnings){
     cpuGame.bases=[true,true,false];
-    cpuGame.baseRunners=[null,null,null];
+    cpuGame.baseRunners=createTiebreakRunners();
    }else{
     cpuGame.bases=[false,false,false];
     cpuGame.baseRunners=[null,null,null];
@@ -3173,7 +3214,7 @@ function cpuResolveAtBat(guess,secret=null){
     cpuGame.half="表";
     cpuGame.halfAtBats=0;
     cpuGame.bases=[true,true,false];
-    cpuGame.baseRunners=[null,null,null];
+    cpuGame.baseRunners=createTiebreakRunners();
 
     if(!cpuExtraAnnounced){
      cpuExtraAnnounced=true;
