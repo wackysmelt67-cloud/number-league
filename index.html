@@ -622,20 +622,9 @@ let lastObservedAtBatNo=null;
    ずんだもんボイス共通処理
 ========================== */
 
+/* WAVファイルを順番に再生する */
 let voiceQueue=Promise.resolve();
 
-function voiceIsEnabled(mode){
- const id=mode==="cpu"?"cpuSoundEnabled":"soundEnabled";
- return !!$(id)?.checked;
-}
-
-function voiceVolume(mode){
- const id=mode==="cpu"?"cpuSoundVolume":"soundVolume";
- const value=Number($(id)?.value??80);
- return Math.max(0,Math.min(1,value/100));
-}
-
-/* WAVファイルを順番に再生する */
 function playVoice(file,mode="online"){
  if(!voiceIsEnabled(mode)||voiceVolume(mode)<=0)return voiceQueue;
 
@@ -649,6 +638,7 @@ function playVoice(file,mode="online"){
   audio.volume=voiceVolume(mode);
 
   let finished=false;
+
   const finish=()=>{
    if(finished)return;
    finished=true;
@@ -659,6 +649,7 @@ function playVoice(file,mode="online"){
   audio.addEventListener("error",finish,{once:true});
 
   const result=audio.play();
+
   if(result&&typeof result.catch==="function"){
    result.catch(()=>{
     console.warn("音声を再生できませんでした："+file);
@@ -670,13 +661,10 @@ function playVoice(file,mode="online"){
  return voiceQueue;
 }
 
-/* 複数の音声を順番に再生する */
 function playVoiceSequence(files,mode="online"){
- let sequence=voiceQueue;
  for(const file of files){
-  sequence=sequence.then(()=>playVoice(file,mode));
+  playVoice(file,mode);
  }
- voiceQueue=sequence;
  return voiceQueue;
 }
 
