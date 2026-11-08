@@ -42,6 +42,10 @@ input,select{
  background:#142235;border:1px solid #52677f;
  color:white;text-align:center
 }
+input[type=range]{
+ width:100%;padding:0;margin:8px 0;
+ accent-color:#35c9ad
+}
 .status{
  margin-top:10px;padding:12px;border-radius:9px;
  background:#142235;color:#f4d58b;font-size:13px;
@@ -100,6 +104,28 @@ input,select{
  background:#142235;border:1px solid #344963;
  border-radius:10px;padding:12px;margin:10px 0;line-height:1.8
 }
+
+/* CPU戦・オンライン戦の打席結果を強調 */
+#lastResult,#cpuLastResult{
+ font-size:20px;
+ font-weight:bold;
+ padding:20px 14px;
+ margin:14px 0;
+ border:2px solid #55d6be;
+ border-radius:13px;
+ background:linear-gradient(135deg,#142235,#1b354b);
+ line-height:1.9;
+ min-height:76px;
+ box-shadow:0 0 14px rgba(85,214,190,.12);
+ overflow-wrap:anywhere
+}
+#lastResult .play-result-line,
+#cpuLastResult .play-result-line{
+ font-size:14px;
+ font-weight:normal;
+ color:#d5e2ef;
+ margin-top:8px
+}
 .member{
  background:#142235;border:1px solid #344963;
  padding:10px;border-radius:9px;margin:6px 0;
@@ -112,7 +138,6 @@ input,select{
  overflow-y:auto;text-align:left;font-size:13px
 }
 .chat-message{padding:6px 3px;border-bottom:1px solid #344963;overflow-wrap:anywhere}
-#lastResult{font-size:20px;font-weight:bold;padding:18px 12px;border-color:#55d6be}
 .score-stats{font-size:14px;color:#d5e2ef;margin-top:5px}
 .batting-stats,.pitching-stats{
  background:#142235;border:1px solid #344963;
@@ -175,6 +200,10 @@ input,select{
  color:#aab9cc;font-size:11px;margin-top:10px;line-height:1.8
 }
 .sound-setting{font-size:13px;color:#aab9cc;margin:8px 0}
+.sound-volume-label{
+ display:flex;justify-content:space-between;gap:10px;
+ color:#aab9cc;font-size:12px;margin-top:7px
+}
 
 /* 試合履歴 */
 .game-log{
@@ -191,6 +220,50 @@ input,select{
 }
 .game-log-entry:last-child{border-bottom:0}
 .game-log-empty{color:#aab9cc;font-size:12px}
+
+/* 打席結果の色分け */
+.play-out{
+ color:#ff8585;
+ font-weight:bold
+}
+.play-hit{
+ color:#65e69a;
+ font-weight:bold
+}
+.play-double{
+ color:#65baff;
+ font-weight:bold
+}
+.play-triple{
+ color:#c69aff;
+ font-weight:bold
+}
+.play-homerun{
+ color:#ffd166;
+ font-weight:bold;
+ text-shadow:0 0 8px rgba(255,209,102,.25)
+}
+.play-special{
+ display:inline-block;
+ color:#ffd166;
+ background:#493d24;
+ border:1px solid #a98a3c;
+ border-radius:6px;
+ padding:2px 7px;
+ margin:3px 3px 3px 0;
+ font-weight:bold;
+ font-size:12px
+}
+.play-special.walkoff{
+ color:#fff0a6;
+ background:#65442c;
+ border-color:#ffd166;
+ font-size:13px
+}
+.play-result-line{
+ display:block;
+ margin-top:4px
+}
 
 footer{color:#8294aa;font-size:11px;margin-top:25px}
 </style>
@@ -309,31 +382,6 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 
 <div id="cpuLastResult" class="result">試合開始前です。</div>
 
-<div id="cpuBattingStats" class="batting-stats">
- <h3>打率・打席成績</h3>
- <div>まだ記録はありません。</div>
-</div>
-
-<div id="cpuPitchingStats" class="pitching-stats">
- <h3>投手成績・防御率</h3>
- <div>まだ記録はありません。</div>
-</div>
-
-<div id="cpuNumberUsageStats" class="number-usage">
- <h3>数字の使用率</h3>
- <div>まだ記録はありません。</div>
-</div>
-
-<div id="cpuGameLog" class="game-log">
- <h3>試合履歴</h3>
- <div class="game-log-empty">まだ記録はありません。</div>
-</div>
-
-<label class="sound-setting">
-<input id="cpuSoundEnabled" type="checkbox" checked style="width:auto;margin-right:6px">
-効果音 ON
-</label>
-
 <div id="cpuDefenseArea" class="hidden">
 <h2>ピッチャー：秘密の数字</h2>
 <p class="note">今回の打席で守る4桁の数字を入力してください。</p>
@@ -353,6 +401,36 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 <div id="cpuFinishedArea" class="result hidden">
 <h2>試合終了</h2>
 <div id="cpuFinalResult"></div>
+</div>
+
+<div id="cpuBattingStats" class="batting-stats">
+ <h3>打率・打席成績</h3>
+ <div>まだ記録はありません。</div>
+</div>
+
+<div id="cpuPitchingStats" class="pitching-stats">
+ <h3>投手成績・防御率</h3>
+ <div>まだ記録はありません。</div>
+</div>
+
+<div id="cpuGameLog" class="game-log">
+ <h3>試合履歴</h3>
+ <div class="game-log-empty">まだ記録はありません。</div>
+</div>
+
+<label class="sound-setting">
+<input id="cpuSoundEnabled" type="checkbox" checked style="width:auto;margin-right:6px">
+ずんだもんボイス ON
+</label>
+<div class="sound-volume-label">
+ <span>CPU戦ボイス音量</span>
+ <strong id="cpuSoundVolumeText">80%</strong>
+</div>
+<input id="cpuSoundVolume" type="range" min="0" max="100" value="80">
+
+<div id="cpuNumberUsageStats" class="number-usage">
+ <h3>プレイヤー別・数字の使用率</h3>
+ <div>まだ記録はありません。</div>
 </div>
 
 <button class="danger" onclick="exitCpuGame()">CPU対戦を終了する</button>
@@ -420,25 +498,8 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
  <div id="base1" class="base"><span>1塁</span></div>
  <div id="homeBase" class="base"><span>ホーム</span></div>
 </div>
+
 <div id="lastResult" class="result">まだ打席はありません。</div>
-<div id="battingStats" class="batting-stats"><h3>打率・打席成績</h3><div>まだ記録はありません。</div></div>
-
-<div id="pitchingStats" class="pitching-stats">
- <h3>投手成績・防御率</h3>
- <div>まだ記録はありません。</div>
-</div>
-
-<div id="numberUsageStats" class="number-usage">
- <h3>数字の使用率</h3>
- <div>まだ記録はありません。</div>
-</div>
-
-<div id="onlineGameLog" class="game-log">
- <h3>試合履歴</h3>
- <div class="game-log-empty">まだ記録はありません。</div>
-</div>
-
-<label class="sound-setting"><input id="soundEnabled" type="checkbox" checked style="width:auto;margin-right:6px">効果音 ON</label>
 
 <div id="defenseArea" class="hidden">
 <h2>ピッチャー：秘密の数字</h2>
@@ -465,6 +526,36 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 <div id="finalResult"></div>
 <button id="rematchButton" onclick="startRematch()">同じチームで再戦</button>
 <button id="reorganizeButton" class="secondary" onclick="reorganizeTeams()">チームを再編成</button>
+</div>
+
+<div id="battingStats" class="batting-stats">
+ <h3>打率・打席成績</h3>
+ <div>まだ記録はありません。</div>
+</div>
+
+<div id="pitchingStats" class="pitching-stats">
+ <h3>投手成績・防御率</h3>
+ <div>まだ記録はありません。</div>
+</div>
+
+<div id="onlineGameLog" class="game-log">
+ <h3>試合履歴</h3>
+ <div class="game-log-empty">まだ記録はありません。</div>
+</div>
+
+<label class="sound-setting">
+<input id="soundEnabled" type="checkbox" checked style="width:auto;margin-right:6px">
+ずんだもんボイス ON
+</label>
+<div class="sound-volume-label">
+ <span>オンライン戦ボイス音量</span>
+ <strong id="soundVolumeText">80%</strong>
+</div>
+<input id="soundVolume" type="range" min="0" max="100" value="80">
+
+<div id="numberUsageStats" class="number-usage">
+ <h3>プレイヤー別・数字の使用率</h3>
+ <div>まだ記録はありません。</div>
 </div>
 
 <div id="leaveArea">
@@ -522,11 +613,98 @@ let chatUnsubscribers=[];
 let resolvingId=null;
 let lastGameWasFinished=false;
 let lastSoundResultId=null;
-let audioContext=null;
 let lastObservedAtBatId=null;
 let lastObservedHalf=null;
 let lastObservedBatterUid=null;
 let lastObservedAtBatNo=null;
+
+/* ==========================
+   ずんだもんボイス共通処理
+========================== */
+
+let voiceQueue=Promise.resolve();
+
+/* 音声設定を取得 */
+function voiceIsEnabled(mode){
+ const id=mode==="cpu"?"cpuSoundEnabled":"soundEnabled";
+ return !!$(id)?.checked;
+}
+
+function voiceVolume(mode){
+ const id=mode==="cpu"?"cpuSoundVolume":"soundVolume";
+ const value=Number($(id)?.value??80);
+ return Math.max(0,Math.min(1,value/100));
+}
+
+/* WAVファイルを順番に再生する */
+function playVoice(file,mode="online"){
+ if(!voiceIsEnabled(mode)||voiceVolume(mode)<=0)return voiceQueue;
+
+ voiceQueue=voiceQueue.then(()=>new Promise(resolve=>{
+  if(!voiceIsEnabled(mode)||voiceVolume(mode)<=0){
+   resolve();
+   return;
+  }
+
+  const audio=new Audio("./"+file);
+  audio.volume=voiceVolume(mode);
+
+  let finished=false;
+
+  const finish=()=>{
+   if(finished)return;
+   finished=true;
+   resolve();
+  };
+
+  audio.addEventListener("ended",finish,{once:true});
+  audio.addEventListener("error",finish,{once:true});
+
+  const result=audio.play();
+
+  if(result&&typeof result.catch==="function"){
+   result.catch(()=>{
+    console.warn("音声を再生できませんでした："+file);
+    finish();
+   });
+  }
+ }));
+
+ return voiceQueue;
+}
+
+function playVoiceSequence(files,mode="online"){
+ for(const file of files){
+  playVoice(file,mode);
+ }
+ return voiceQueue;
+}
+
+/* 打席結果：一致数0〜4に対応 */
+function playResultSound(hitCount,mode="online"){
+ const files=[
+  "out.wav",
+  "hit.wav",
+  "double.wav",
+  "triple.wav",
+  "homerun.wav"
+ ];
+ const file=files[Number(hitCount)];
+ if(file)playVoice(file,mode);
+}
+
+/* 攻守交代 */
+function playTransitionSound(type,mode="online"){
+ if(type==="side")playVoice("change.wav",mode);
+}
+
+/* 音量表示 */
+$("soundVolume")?.addEventListener("input",()=>{
+ $("soundVolumeText").textContent=$("soundVolume").value+"%";
+});
+$("cpuSoundVolume")?.addEventListener("input",()=>{
+ $("cpuSoundVolumeText").textContent=$("cpuSoundVolume").value+"%";
+});
 
 function uid(){return auth.currentUser?.uid||null;}
 
@@ -569,50 +747,128 @@ window.savePlayerName=async()=>{
  }
 };
 
-function playResultSound(hitCount){
- if(!$("soundEnabled")?.checked)return;
- try{
-  const AudioCtx=window.AudioContext||window.webkitAudioContext;
-  if(!AudioCtx)return;
-  audioContext=audioContext||new AudioCtx();
-  if(audioContext.state==="suspended")audioContext.resume();
-  const patterns={0:[220,160],1:[440],2:[440,660],3:[440,660,880],4:[523,659,784,1047]};
-  const notes=patterns[hitCount]||[330],start=audioContext.currentTime;
-  notes.forEach((freq,i)=>{
-   const osc=audioContext.createOscillator(),gain=audioContext.createGain();
-   osc.type=hitCount===0?"triangle":"sine";osc.frequency.value=freq;
-   gain.gain.setValueAtTime(0.0001,start+i*0.12);
-   gain.gain.exponentialRampToValueAtTime(0.16,start+i*0.12+0.02);
-   gain.gain.exponentialRampToValueAtTime(0.0001,start+i*0.12+0.18);
-   osc.connect(gain);gain.connect(audioContext.destination);
-   osc.start(start+i*0.12);osc.stop(start+i*0.12+0.2);
-  });
- }catch(e){console.warn("効果音を再生できませんでした",e);}
+/* 打席結果の色分け用 */
+function playResultClass(hits){
+ const classes=[
+  "play-out",
+  "play-hit",
+  "play-double",
+  "play-triple",
+  "play-homerun"
+ ];
+ return classes[Number(hits)]||"";
 }
 
-function playTransitionSound(type){
- if(!$("soundEnabled")?.checked)return;
- try{
-  const AudioCtx=window.AudioContext||window.webkitAudioContext;
-  if(!AudioCtx)return;
-  audioContext=audioContext||new AudioCtx();
-  if(audioContext.state==="suspended")audioContext.resume();
-  const patterns=type==="side"?[330,440,660]:[660,523];
-  const start=audioContext.currentTime;
-  patterns.forEach((freq,i)=>{
-   const osc=audioContext.createOscillator();
-   const gain=audioContext.createGain();
-   osc.type="sine";
-   osc.frequency.value=freq;
-   gain.gain.setValueAtTime(0.0001,start+i*0.13);
-   gain.gain.exponentialRampToValueAtTime(0.12,start+i*0.13+0.02);
-   gain.gain.exponentialRampToValueAtTime(0.0001,start+i*0.13+0.16);
-   osc.connect(gain);
-   gain.connect(audioContext.destination);
-   osc.start(start+i*0.13);
-   osc.stop(start+i*0.13+0.18);
+/* 特別な打撃結果を判定 */
+function classifyPlay({
+ hits,
+ runs,
+ batting,
+ scoresBefore,
+ scoresAfter,
+ inning,
+ half,
+ maxInnings,
+ wasFirstBatter
+}){
+ const tags=[];
+ const beforeBatting=Number(scoresBefore?.[batting])||0;
+ const beforeOpponent=Number(scoresBefore?.[batting==="first"?"second":"first"])||0;
+ const afterBatting=Number(scoresAfter?.[batting])||0;
+ const afterOpponent=Number(scoresAfter?.[batting==="first"?"second":"first"])||0;
+
+ const walkoff=
+  half==="裏"&&
+  batting==="second"&&
+  Number(inning)>=Number(maxInnings)&&
+  afterBatting>afterOpponent&&
+  beforeBatting<=beforeOpponent;
+
+ if(hits===4){
+  if(walkoff){
+   tags.push("サヨナラホームラン");
+  }else if(wasFirstBatter){
+   tags.push("先頭打者ホームラン");
+  }
+
+  if(runs===1)tags.push("ソロホームラン");
+  if(runs===2)tags.push("2ランホームラン");
+  if(runs===3)tags.push("3ランホームラン");
+  if(runs>=4)tags.push("満塁ホームラン");
+ }
+
+ if(walkoff&&hits>0&&hits<4){
+  tags.push("サヨナラヒット");
+ }
+
+ if(afterBatting>afterOpponent&&beforeBatting<=beforeOpponent){
+  if(beforeBatting<beforeOpponent){
+   tags.push("逆転");
+  }else{
+   tags.push("勝ち越し");
+  }
+ }
+
+ if(hits>0&&hits<4&&runs>0){
+  tags.push("タイムリーヒット");
+ }
+
+ return tags;
+}
+
+/* 判定結果を安全に表示する */
+function renderPlayResult(element,result){
+ if(!element)return;
+ element.textContent="";
+
+ if(!result){
+  element.textContent="まだ打席はありません。";
+  return;
+ }
+
+ const label=document.createElement("span");
+ label.className=playResultClass(result.hits);
+ label.textContent=
+  (result.label||"判定")+
+  "（一致 "+result.hits+"個）";
+ element.appendChild(label);
+
+ const detail=document.createElement("div");
+ detail.className="play-result-line";
+ detail.textContent=
+  "予想："+(result.guess||"----")+
+  " / 守備側："+(result.secret||"----")+
+  " / 得点："+(Number(result.runs)||0);
+ element.appendChild(detail);
+
+ if(Array.isArray(result.playTags)){
+  result.playTags.forEach(tag=>{
+   const badge=document.createElement("span");
+   badge.className="play-special"+
+    (String(tag).includes("サヨナラ")?" walkoff":"");
+   badge.textContent=tag;
+   element.appendChild(badge);
   });
- }catch(e){console.warn("交代音を再生できませんでした",e);}
+ }
+}
+
+/* 試合履歴の判定部分を色付きで追加 */
+function appendLogResult(row,item){
+ const result=document.createElement("span");
+ result.className=playResultClass(item.hits);
+ result.textContent=
+  (item.label||"判定")+"（一致 "+item.hits+"個）";
+ row.appendChild(result);
+
+ if(Array.isArray(item.playTags)){
+  item.playTags.forEach(tag=>{
+   const badge=document.createElement("span");
+   badge.className="play-special"+
+    (String(tag).includes("サヨナラ")?" walkoff":"");
+   badge.textContent=tag;
+   row.appendChild(badge);
+  });
+ }
 }
 
 const roomRef=()=>ref(database,"rooms/"+currentRoomCode);
@@ -673,6 +929,15 @@ function isSpectator(){
  return currentRole==="spectator";
 }
 
+/* 延長戦の自動ランナーを作成 */
+function createTiebreakRunners(){
+ return [
+  {uid:null,name:"タイブレーク走者",number:"----"},
+  {uid:null,name:"タイブレーク走者",number:"----"},
+  null
+ ];
+}
+
 function watchRoom(code,role){
  if(roomUnsubscribe)roomUnsubscribe();
  if(gameUnsubscribe)gameUnsubscribe();
@@ -687,6 +952,11 @@ function watchRoom(code,role){
  lastObservedBatterUid=null;
  lastObservedAtBatNo=null;
  lastSoundResultId=null;
+
+ /* 音声の重複再生防止用状態をリセット */
+ lastObservedScores=null;
+ lastExtraAnnounced=false;
+ lastFinishedAnnouncementKey=null;
 
  show("gamePanel");
  $("roleTitle").textContent=role==="player"?"プレイヤー画面":"観戦者画面";
@@ -752,7 +1022,6 @@ function watchGame(){
   }
  });
 }
-
 function renderLobby(){
  if(!currentRoom)return;
 
@@ -794,7 +1063,6 @@ function renderLobby(){
    (id===currentRoom.hostUid?" / 部屋主":"");
   list.appendChild(div);
  }
-
  const first=teamPlayers(currentRoom,"first").length;
  const second=teamPlayers(currentRoom,"second").length;
  const cap1=teamCapacity(currentRoom,"first");
@@ -1044,9 +1312,20 @@ window.startGame=async()=>{
   return;
  }
 
+ /* 新しい試合の音声判定状態を初期化 */
+ lastObservedAtBatId=null;
+ lastObservedHalf=null;
+ lastObservedBatterUid=null;
+ lastObservedAtBatNo=null;
+ lastSoundResultId=null;
+ lastObservedScores=null;
+ lastExtraAnnounced=false;
+ lastFinishedAnnouncementKey=null;
+
  const initial={
   inning:1,
   half:"表",
+  halfAtBats:0,
   outs:0,
   maxInnings:Number(currentRoom.innings)||9,
   bases:[false,false,false],
@@ -1056,7 +1335,7 @@ window.startGame=async()=>{
   batterStats:{},
   pitcherStats:{},
   numberUsage:{
-   all:{totalNumbers:0,fourDigit:{},singleDigits:{}}
+   players:{}
   },
   gameLog:[],
   batterTurn:{first:0,second:0},
@@ -1081,6 +1360,47 @@ function defendingTeam(g){return g.half==="表"?"second":"first"}
 function runnerDisplayName(runner){
  if(!runner)return "不明";
  return runner.name||displayName(runner.uid);
+}
+
+/* 数字使用率の空データ */
+function emptyNumberUsage(){
+ return {
+  totalNumbers:0,
+  fourDigit:{},
+  singleDigits:{}
+ };
+}
+
+/* 指定プレイヤーの秘密の数字・予想数字を記録 */
+function recordPlayerNumberUsage(numberUsage,playerId,type,number){
+ if(!playerId)return;
+
+ if(!numberUsage.players)numberUsage.players={};
+
+ const playerUsage=numberUsage.players[playerId]||{
+  pitches:emptyNumberUsage(),
+  guesses:emptyNumberUsage()
+ };
+
+ if(!playerUsage[type])playerUsage[type]=emptyNumberUsage();
+
+ const usage=playerUsage[type];
+ const normalized=String(number).padStart(4,"0");
+
+ usage.totalNumbers=(Number(usage.totalNumbers)||0)+1;
+
+ if(!usage.fourDigit)usage.fourDigit={};
+ if(!usage.singleDigits)usage.singleDigits={};
+
+ usage.fourDigit[normalized]=
+  (Number(usage.fourDigit[normalized])||0)+1;
+
+ for(const digit of normalized){
+  usage.singleDigits[digit]=
+   (Number(usage.singleDigits[digit])||0)+1;
+ }
+
+ numberUsage.players[playerId]=playerUsage;
 }
 
 /* 4桁数字・0〜9の集計を表示する共通関数 */
@@ -1202,19 +1522,24 @@ function renderOnlineGameLog(g){
   const row=document.createElement("div");
   row.className="game-log-entry";
 
-  row.textContent=
+  row.appendChild(document.createTextNode(
    (index+1)+"打席目　"+
    item.inning+"回"+item.half+
    " / 打者："+(item.batterName||displayName(item.batterUid))+
    " / 予想："+item.guess+
    " / 守備："+item.secret+
-   " / "+item.label+
-   "（一致 "+item.hits+"個）"+
+   " / "
+  ));
+
+  appendLogResult(row,item);
+
+  row.appendChild(document.createTextNode(
    (item.reachedBase?" / 出塁："+(item.batterName||"打者")+"（"+item.guess+"）":"")+
    " / 得点："+item.runs+
    (item.scoredRunners?.length
     ?" / 得点者："+item.scoredRunners.map(r=>runnerDisplayName(r)+"（"+r.number+"）").join("、")
-    :"");
+    :"")
+  ));
 
   area.appendChild(row);
  });
@@ -1222,7 +1547,7 @@ function renderOnlineGameLog(g){
  area.scrollTop=area.scrollHeight;
 }
 
-/* 投手別＋全体の数字使用率の表示 */
+/* プレイヤーごとの秘密の数字・予想数字の使用率 */
 function renderNumberUsage(g){
  const area=$("numberUsageStats");
  if(!area)return;
@@ -1230,132 +1555,45 @@ function renderNumberUsage(g){
  area.innerHTML="";
 
  const title=document.createElement("h3");
- title.textContent="数字の使用率";
+ title.textContent="プレイヤー別・数字の使用率";
  area.appendChild(title);
 
- const allUsage=g.numberUsage||{};
+ const playersUsage=g.numberUsage?.players||{};
+ const ids=playerIds(currentRoom);
 
- /* 打者の予想数字＋投手の秘密の数字を合わせた全体集計 */
- const summary=document.createElement("div");
- summary.className="number-player";
- appendNumberUsageSummary(
-  summary,
-  allUsage.all||{},
-  "全選手の数字使用率（打者の予想＋投手の秘密）"
- );
- area.appendChild(summary);
-
- const pitcherIds=Object.keys(allUsage).filter(id=>id!=="all");
-
- if(!pitcherIds.length){
+ if(!ids.length){
   const empty=document.createElement("div");
   empty.className="number-total";
-  empty.textContent="投手別の記録はまだありません。";
+  empty.textContent="プレイヤー情報がありません。";
   area.appendChild(empty);
   return;
  }
 
- for(const pitcherId of pitcherIds){
-  const usage=allUsage[pitcherId]||{};
-  const total=Number(usage.totalPitches)||0;
-  const digitTotal=total*4;
+ ids.forEach(playerId=>{
+  const usage=playersUsage[playerId]||{};
 
   const section=document.createElement("div");
   section.className="number-player";
 
   const name=document.createElement("div");
   name.className="number-player-name";
-  name.textContent="投手："+displayName(pitcherId);
+  name.textContent=displayName(playerId);
   section.appendChild(name);
 
-  const fourTitle=document.createElement("div");
-  fourTitle.className="number-section-title";
-  fourTitle.textContent="秘密の4桁 使用回数 TOP3";
-  section.appendChild(fourTitle);
+  appendNumberUsageSummary(
+   section,
+   usage.pitches||emptyNumberUsage(),
+   "投手として設定した秘密の数字"
+  );
 
-  const fourEntries=Object.entries(usage.fourDigit||{})
-   .sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]))
-   .slice(0,3);
+  appendNumberUsageSummary(
+   section,
+   usage.guesses||emptyNumberUsage(),
+   "打者として予想した数字"
+  );
 
-  if(!fourEntries.length){
-   const empty=document.createElement("div");
-   empty.textContent="記録なし";
-   section.appendChild(empty);
-  }
-
-  fourEntries.forEach(([number,count],index)=>{
-   const rate=total?count/total*100:0;
-
-   const row=document.createElement("div");
-   row.className="number-ranking-row";
-
-   const left=document.createElement("span");
-   left.textContent=(index+1)+"位　"+number;
-
-   const right=document.createElement("strong");
-   right.textContent=count+"回 / "+rate.toFixed(1)+"%";
-
-   row.append(left,right);
-   section.appendChild(row);
-
-   const bar=document.createElement("div");
-   bar.className="number-bar";
-
-   const fill=document.createElement("div");
-   fill.className="number-bar-fill";
-   fill.style.width=Math.min(rate,100)+"%";
-
-   bar.appendChild(fill);
-   section.appendChild(bar);
-  });
-
-  const digitTitle=document.createElement("div");
-  digitTitle.className="number-section-title";
-  digitTitle.textContent="秘密の数字：各桁の使用率";
-  section.appendChild(digitTitle);
-
-  const grid=document.createElement("div");
-  grid.className="number-digit-grid";
-
-  const digitCounts=usage.singleDigits||{};
-
-  for(let i=0;i<10;i++){
-   const digit=String(i);
-   const count=Number(digitCounts[digit])||0;
-   const rate=digitTotal?count/digitTotal*100:0;
-
-   const cell=document.createElement("div");
-   cell.className="number-digit-cell";
-
-   const row=document.createElement("div");
-   row.className="number-ranking-row";
-
-   const left=document.createElement("span");
-   left.textContent=digit;
-
-   const right=document.createElement("strong");
-   right.textContent=count+"回";
-
-   row.append(left,right);
-
-   const percentage=document.createElement("div");
-   percentage.className="number-digit-rate";
-   percentage.textContent=rate.toFixed(1)+"%";
-
-   cell.append(row,percentage);
-   grid.appendChild(cell);
-  }
-
-  section.appendChild(grid);
-
-  const totalText=document.createElement("div");
-  totalText.className="number-total";
-  totalText.textContent=
-   "投球数："+total+"回 / 集計桁数："+digitTotal+"桁";
-
-  section.appendChild(totalText);
   area.appendChild(section);
- }
+ });
 }
 
 /* 投手別・防御率の表示 */
@@ -1401,11 +1639,87 @@ function renderPitchingStats(g){
   area.appendChild(row);
  }
 }
+
+/* 音声判定用の状態 */
+let lastObservedScores=null;
+let lastExtraAnnounced=false;
+let lastFinishedAnnouncementKey=null;
+
+/* スコア変化を見て同点・逆転を読み上げる */
+function announceOnlineScoreChange(scores){
+ const current={
+  first:Number(scores?.first)||0,
+  second:Number(scores?.second)||0
+ };
+
+ if(lastObservedScores===null){
+  lastObservedScores=current;
+  return;
+ }
+
+ const previous=lastObservedScores;
+ lastObservedScores=current;
+
+ const wasTied=previous.first===previous.second;
+ const isTied=current.first===current.second;
+
+ if(!wasTied&&isTied){
+  playVoice("tie.wav","online");
+  return;
+ }
+
+ const firstComeback=
+  previous.first<previous.second&&current.first>current.second;
+ const secondComeback=
+  previous.second<previous.first&&current.second>current.first;
+
+ if(firstComeback||secondComeback){
+  playVoice("comeback.wav","online");
+ }
+}
+
+function announceOnlineGameFinished(g){
+ const key=g.atBatId||
+  String(g.inning)+"-"+String(g.half)+"-"+
+  String(g.scores?.first)+"-"+String(g.scores?.second);
+
+ if(lastFinishedAnnouncementKey===key)return;
+ lastFinishedAnnouncementKey=key;
+
+ const first=Number(g.scores?.first)||0;
+ const second=Number(g.scores?.second)||0;
+
+ if(first>second){
+  playVoiceSequence(["game-set.wav","first-win.wav"],"online");
+ }else if(second>first){
+  playVoiceSequence(["game-set.wav","second-win.wav"],"online");
+ }else{
+  playVoice("game-set.wav","online");
+ }
+}
+
 function renderGame(g){
  const me=uid();
  const batting=battingTeam(g);
  const defending=defendingTeam(g);
 
+ const firstRender=lastObservedScores===null;
+
+ /* スコアの変化を検出 */
+ announceOnlineScoreChange(g.scores);
+
+ /* 延長戦開始は最初の1回だけ読み上げる */
+ if(firstRender){
+  lastExtraAnnounced=Number(g.inning)>Number(g.maxInnings);
+ }else if(
+  Number(g.inning)>Number(g.maxInnings)&&
+  !lastExtraAnnounced
+ ){
+  lastExtraAnnounced=true;
+  playVoice("extra.wav","online");
+ }
+
+ /* 打席番号が変わった場合の攻守交代音声 */
  if(lastObservedAtBatId===null){
   lastObservedAtBatId=g.atBatId||null;
   lastObservedHalf=g.half;
@@ -1413,10 +1727,9 @@ function renderGame(g){
   lastObservedAtBatNo=g.atBatNo;
  }else if(g.atBatId&&g.atBatId!==lastObservedAtBatId){
   if(g.half!==lastObservedHalf){
-   playTransitionSound("side");
-  }else if(g.atBatNo!==lastObservedAtBatNo){
-   playTransitionSound("batter");
+   playTransitionSound("side","online");
   }
+
   lastObservedAtBatId=g.atBatId;
   lastObservedHalf=g.half;
   lastObservedBatterUid=g.batterUid||null;
@@ -1433,15 +1746,24 @@ function renderGame(g){
   const members=teamPlayers(currentRoom,team);
   members.forEach((id,index)=>{
    const st=g.batterStats?.[id]||{atBats:0,hits:0};
-   const avg=st.atBats?(st.hits/st.atBats).toFixed(3).replace(/^0/,""):"---";
-   statRows.push('<div class="batting-row"><span>'+teamLabel(team)+' '+(index+1)+'</span><strong>'+avg+'（'+st.hits+'安打/'+st.atBats+'打数）</strong></div>');
+   const atBats=Number(st.atBats)||0;
+   const hits=Number(st.hits)||0;
+   const avg=atBats?(hits/atBats).toFixed(3).replace(/^0/,""):"---";
+   statRows.push(
+    '<div class="batting-row"><span>'+
+    teamLabel(team)+' '+(index+1)+
+    '：'+cleanPlayerName(currentRoom?.players?.[id]?.name||"名前未設定")+
+    '</span><strong>'+avg+'（'+hits+'安打/'+atBats+'打数）</strong></div>'
+   );
   });
  }
- $("battingStats").innerHTML="<h3>打率・打席成績</h3>"+(statRows.join("")||"<div>まだ記録はありません。</div>");
+ $("battingStats").innerHTML=
+  "<h3>打率・打席成績</h3>"+
+  (statRows.join("")||"<div>まだ記録はありません。</div>");
 
  renderPitchingStats(g);
- renderNumberUsage(g);
  renderOnlineGameLog(g);
+ renderNumberUsage(g);
 
  $("inning").textContent=g.inning>g.maxInnings
   ?"延長"+(g.inning-g.maxInnings)+"回"
@@ -1457,21 +1779,22 @@ function renderGame(g){
   "バッター："+displayName(g.batterUid)+
   " / ピッチャー："+displayName(g.pitcherUid);
 
- if(!g.lastResult&&lastSoundResultId===null)lastSoundResultId=g.atBatId;
+ /* 新しい打席結果だけ音声を再生 */
+ if(!g.lastResult&&lastSoundResultId===null){
+  lastSoundResultId=g.atBatId||null;
+ }
 
  if(g.lastResult){
   const resultId=g.lastResult.id||g.atBatId;
-  if(lastSoundResultId===null)lastSoundResultId=resultId;
-  else if(lastSoundResultId!==resultId){
+
+  if(lastSoundResultId===null){
    lastSoundResultId=resultId;
-   playResultSound(g.lastResult.hits);
+  }else if(lastSoundResultId!==resultId){
+   lastSoundResultId=resultId;
+   playResultSound(g.lastResult.hits,"online");
   }
 
-  $("lastResult").textContent=
-   g.lastResult.label+"（一致 "+g.lastResult.hits+"個）"+
-   " / 予想："+g.lastResult.guess+
-   " / 守備側："+g.lastResult.secret+
-   " / 得点："+g.lastResult.runs;
+  renderPlayResult($("lastResult"),g.lastResult);
  }else{
   $("lastResult").textContent="まだ打席はありません。";
  }
@@ -1490,6 +1813,15 @@ function renderGame(g){
   const b=g.scores.second||0;
   $("finalResult").textContent=
    a===b?"引き分けです。":(a>b?"先攻":"後攻")+"の勝利です。";
+
+  /* 最初に試合終了画面を読み込んだ場合は再生せず、
+     試合中から終了に変化した場合だけ読み上げる */
+  if(!firstRender){
+   announceOnlineGameFinished(g);
+  }else{
+   lastFinishedAnnouncementKey=g.atBatId||
+    String(g.inning)+"-"+String(g.half)+"-"+a+"-"+b;
+  }
 
   $("rematchButton").classList.toggle("hidden",uid()!==currentRoom.hostUid);
   $("reorganizeButton").classList.toggle("hidden",uid()!==currentRoom.hostUid);
@@ -1585,7 +1917,6 @@ window.submitGuess=async()=>{
   status("予想エラー："+e.message);
  }
 };
-
 /* オンラインの打席処理 */
 function calculateNext(g,hits,secret,guess){
  const next={
@@ -1599,11 +1930,7 @@ function calculateNext(g,hits,secret,guess){
   pitcherStats:{...(g.pitcherStats||{})},
   numberUsage:{
    ...(g.numberUsage||{}),
-   all:{
-    totalNumbers:Number(g.numberUsage?.all?.totalNumbers)||0,
-    fourDigit:{...(g.numberUsage?.all?.fourDigit||{})},
-    singleDigits:{...(g.numberUsage?.all?.singleDigits||{})}
-   }
+   players:{...(g.numberUsage?.players||{})}
   },
   gameLog:[...(g.gameLog||[])]
  };
@@ -1615,6 +1942,10 @@ function calculateNext(g,hits,secret,guess){
  const pitcher=g.pitcherUid;
  const batterName=currentRoom?.players?.[batter]?.name||"名前未設定";
  const pitcherName=currentRoom?.players?.[pitcher]?.name||"名前未設定";
+
+ const scoresBefore={...next.scores};
+ const wasFirstBatter=(Number(g.halfAtBats)||0)===0;
+ next.halfAtBats=(Number(g.halfAtBats)||0)+1;
 
  let runs=0;
  let scoredRunners=[];
@@ -1630,40 +1961,23 @@ function calculateNext(g,hits,secret,guess){
  }
  next.batterStats[batter]=batterStat;
 
- /* 打者の予想数字＋投手の秘密の数字を全体集計 */
+ /* 投手の秘密の数字と打者の予想数字を個別に記録 */
  const secretNumber=String(secret).padStart(4,"0");
  const guessNumber=String(guess).padStart(4,"0");
- const allUsage=next.numberUsage.all;
 
- for(const number of [secretNumber,guessNumber]){
-  allUsage.totalNumbers++;
-  allUsage.fourDigit[number]=
-   (Number(allUsage.fourDigit[number])||0)+1;
+ recordPlayerNumberUsage(
+  next.numberUsage,
+  pitcher,
+  "pitches",
+  secretNumber
+ );
 
-  for(const digit of number){
-   allUsage.singleDigits[digit]=
-    (Number(allUsage.singleDigits[digit])||0)+1;
-  }
- }
-
- /* 投手別には秘密の数字だけを集計 */
- const previousUsage=next.numberUsage[pitcher]||{};
- const usage={
-  totalPitches:Number(previousUsage.totalPitches)||0,
-  fourDigit:{...(previousUsage.fourDigit||{})},
-  singleDigits:{...(previousUsage.singleDigits||{})}
- };
-
- usage.totalPitches++;
- usage.fourDigit[secretNumber]=
-  (Number(usage.fourDigit[secretNumber])||0)+1;
-
- for(const digit of secretNumber){
-  usage.singleDigits[digit]=
-   (Number(usage.singleDigits[digit])||0)+1;
- }
-
- next.numberUsage[pitcher]=usage;
+ recordPlayerNumberUsage(
+  next.numberUsage,
+  batter,
+  "guesses",
+  guessNumber
+ );
 
  /* 打者が出塁した場合のランナー情報 */
  const batterRunner={
@@ -1721,6 +2035,18 @@ function calculateNext(g,hits,secret,guess){
   next.scores[batting]=(next.scores[batting]||0)+runs;
  }
 
+ const playTags=classifyPlay({
+  hits,
+  runs,
+  batting,
+  scoresBefore,
+  scoresAfter:next.scores,
+  inning:g.inning,
+  half:g.half,
+  maxInnings:g.maxInnings,
+  wasFirstBatter
+ });
+
  /* この打席の履歴を記録 */
  next.gameLog.push({
   inning:g.inning,
@@ -1736,7 +2062,8 @@ function calculateNext(g,hits,secret,guess){
   label:labels[hits],
   reachedBase:hits>0,
   runs,
-  scoredRunners
+  scoredRunners,
+  playTags
  });
 
  if(next.gameLog.length>300){
@@ -1761,10 +2088,23 @@ function calculateNext(g,hits,secret,guess){
   label:labels[hits],
   secret:secretNumber,
   guess:guessNumber,
-  runs
+  runs,
+  playTags
  };
 
  next.atBatNo++;
+
+ /* 最終回以降の裏で後攻が勝ち越したら即終了 */
+ if(
+  g.half==="裏"&&
+  g.inning>=g.maxInnings&&
+  (next.scores.second||0)>(next.scores.first||0)
+ ){
+  next.bases=[false,false,false];
+  next.baseRunners=[null,null,null];
+  next.phase="finished";
+  return next;
+ }
 
  if(next.outs>=3){
   next.outs=0;
@@ -1781,10 +2121,11 @@ function calculateNext(g,hits,secret,guess){
    }
 
    next.half="裏";
+   next.halfAtBats=0;
 
    if(next.inning>next.maxInnings){
     next.bases=[true,true,false];
-    next.baseRunners=[null,null,null];
+    next.baseRunners=createTiebreakRunners();
    }else{
     next.bases=[false,false,false];
     next.baseRunners=[null,null,null];
@@ -1803,11 +2144,13 @@ function calculateNext(g,hits,secret,guess){
 
     next.inning++;
     next.half="表";
+    next.halfAtBats=0;
     next.bases=[true,true,false];
-    next.baseRunners=[null,null,null];
+    next.baseRunners=createTiebreakRunners();
    }else{
     next.inning++;
     next.half="表";
+    next.halfAtBats=0;
     next.bases=[false,false,false];
     next.baseRunners=[null,null,null];
    }
@@ -2005,9 +2348,20 @@ window.startRematch=async()=>{
 
  if(!first.length||!second.length)return;
 
+ /* 再戦時に音声の重複防止状態を初期化 */
+ lastObservedAtBatId=null;
+ lastObservedHalf=null;
+ lastObservedBatterUid=null;
+ lastObservedAtBatNo=null;
+ lastSoundResultId=null;
+ lastObservedScores=null;
+ lastExtraAnnounced=false;
+ lastFinishedAnnouncementKey=null;
+
  const initial={
   inning:1,
   half:"表",
+  halfAtBats:0,
   outs:0,
   maxInnings:Number(currentRoom.innings)||9,
   bases:[false,false,false],
@@ -2017,7 +2371,7 @@ window.startRematch=async()=>{
   batterStats:{},
   pitcherStats:{},
   numberUsage:{
-   all:{totalNumbers:0,fourDigit:{},singleDigits:{}}
+   players:{}
   },
   gameLog:[],
   batterTurn:{first:0,second:0},
@@ -2044,49 +2398,71 @@ window.reorganizeTeams=async()=>{
  lastGameWasFinished=true;
  status("チームを再編成できます。全員が再度準備完了してください。");
 };
-
+/* チャット：観戦者は先攻・後攻の両方を同時に閲覧 */
 function watchChat(){
  chatUnsubscribers.forEach(fn=>fn());
  chatUnsubscribers=[];
 
  if(!currentRoom)return;
 
- const teams=isSpectator()?["first","second"]:[myPlayer()?.team].filter(Boolean);
+ const teams=isSpectator()
+  ?["first","second"]
+  :[myPlayer()?.team].filter(Boolean);
+
  const list=$("chatList");
  list.innerHTML="";
+
+ const cached={
+  first:{},
+  second:{}
+ };
+
+ function render(){
+  list.innerHTML="";
+
+  const all=[];
+
+  for(const team of teams){
+   for(const [id,message] of Object.entries(cached[team]||{})){
+    all.push({
+     team,
+     id,
+     message
+    });
+   }
+  }
+
+  all.sort((a,b)=>
+   (a.message.createdAt||0)-(b.message.createdAt||0)
+  );
+
+  for(const item of all){
+   const div=document.createElement("div");
+   div.className="chat-message";
+
+   const label=document.createElement("small");
+   const sender=currentRoom?.players?.[item.message.uid]?.name||
+    currentRoom?.spectators?.[item.message.uid]?.name||
+    item.message.name||"参加者";
+
+   label.textContent=teamLabel(item.team)+" / "+sender;
+
+   const body=document.createElement("div");
+   body.textContent=item.message.text||"";
+
+   div.append(label,body);
+   list.appendChild(div);
+  }
+
+  list.scrollTop=list.scrollHeight;
+ }
 
  for(const team of teams){
   const unsub=onValue(
    ref(database,"teamChats/"+currentRoomCode+"/"+team),
    snap=>{
-    const messages=snap.val()||{};
-    const entries=Object.entries(messages).sort((a,b)=>
-     (a[1].createdAt||0)-(b[1].createdAt||0)
-    );
-
-    list.innerHTML="";
-
-    for(const t of ["first","second"]){
-     if(!teams.includes(t))continue;
-     if(t!==team)continue;
-
-     for(const [id,m] of entries){
-      const div=document.createElement("div");
-      div.className="chat-message";
-
-      const label=document.createElement("small");
-      const sender=currentRoom?.players?.[m.uid]?.name||
-       currentRoom?.spectators?.[m.uid]?.name||m.name||"参加者";
-      label.textContent=teamLabel(team)+" / "+sender;
-
-      const body=document.createElement("div");
-      body.textContent=m.text||"";
-      div.append(label,body);
-      list.appendChild(div);
-     }
-    }
-
-    list.scrollTop=list.scrollHeight;
+    cached[team]=snap.val()||{};
+    render();
    }
   );
 
@@ -2139,6 +2515,8 @@ window.copyRoomCode=async()=>{
 
 let cpuGame=null;
 let cpuTimer=null;
+let cpuExtraAnnounced=false;
+let cpuFinishedAnnounced=false;
 
 function cpuRandomNumber(difficulty){
  let digits=[];
@@ -2185,73 +2563,74 @@ function cpuUserIsBatting(){
  return cpuBattingTeam()===cpuGame.userTeam;
 }
 
+/* CPU戦の打席結果音声 */
 function cpuPlaySound(hits){
- if(!$("cpuSoundEnabled").checked)return;
-
- try{
-  const AudioCtx=window.AudioContext||window.webkitAudioContext;
-  if(!AudioCtx)return;
-
-  const ctx=new AudioCtx();
-  const patterns={0:[220,160],1:[440],2:[440,660],3:[440,660,880],4:[523,659,784,1047]};
-  const notes=patterns[hits]||[330];
-  const start=ctx.currentTime;
-
-  notes.forEach((freq,i)=>{
-   const osc=ctx.createOscillator();
-   const gain=ctx.createGain();
-
-   osc.type=hits===0?"triangle":"sine";
-   osc.frequency.value=freq;
-
-   gain.gain.setValueAtTime(0.0001,start+i*0.12);
-   gain.gain.exponentialRampToValueAtTime(0.12,start+i*0.12+0.02);
-   gain.gain.exponentialRampToValueAtTime(0.0001,start+i*0.12+0.18);
-
-   osc.connect(gain);
-   gain.connect(ctx.destination);
-   osc.start(start+i*0.12);
-   osc.stop(start+i*0.12+0.2);
-  });
-
-  setTimeout(()=>ctx.close(),1500);
- }catch(e){}
+ playResultSound(hits,"cpu");
 }
 
+/* CPU戦の攻守交代音声 */
 function cpuPlayTransition(type){
- if(!$("cpuSoundEnabled").checked)return;
+ if(type==="side")playTransitionSound("side","cpu");
+}
 
- try{
-  const AudioCtx=window.AudioContext||window.webkitAudioContext;
-  if(!AudioCtx)return;
+/* CPU戦の同点・逆転読み上げ */
+function cpuAnnounceScoreChange(before,after){
+ const beforeFirst=Number(before.first)||0;
+ const beforeSecond=Number(before.second)||0;
+ const afterFirst=Number(after.first)||0;
+ const afterSecond=Number(after.second)||0;
 
-  const ctx=new AudioCtx();
-  const notes=type==="side"?[330,440,660]:[660,523];
-  const start=ctx.currentTime;
+ const wasTied=beforeFirst===beforeSecond;
+ const isTied=afterFirst===afterSecond;
 
-  notes.forEach((freq,i)=>{
-   const osc=ctx.createOscillator();
-   const gain=ctx.createGain();
+ if(!wasTied&&isTied){
+  playVoice("tie.wav","cpu");
+  return;
+ }
 
-   osc.type="sine";
-   osc.frequency.value=freq;
+ const firstComeback=
+  beforeFirst<beforeSecond&&afterFirst>afterSecond;
+ const secondComeback=
+  beforeSecond<beforeFirst&&afterSecond>afterFirst;
 
-   gain.gain.setValueAtTime(0.0001,start+i*0.13);
-   gain.gain.exponentialRampToValueAtTime(0.1,start+i*0.13+0.02);
-   gain.gain.exponentialRampToValueAtTime(0.0001,start+i*0.13+0.16);
+ if(firstComeback||secondComeback){
+  playVoice("comeback.wav","cpu");
+ }
+}
 
-   osc.connect(gain);
-   gain.connect(ctx.destination);
-   osc.start(start+i*0.13);
-   osc.stop(start+i*0.13+0.18);
-  });
+/* CPU戦の試合終了音声 */
+function cpuFinishGame(){
+ if(!cpuGame||cpuGame.finished)return;
 
-  setTimeout(()=>ctx.close(),1500);
- }catch(e){}
+ cpuGame.finished=true;
+ cpuGame.phase="finished";
+ cpuGame.secret=null;
+
+ if(!cpuFinishedAnnounced){
+  cpuFinishedAnnounced=true;
+
+  const userScore=Number(cpuGame.scores[cpuGame.userTeam])||0;
+  const cpuTeam=cpuGame.userTeam==="first"?"second":"first";
+  const cpuScore=Number(cpuGame.scores[cpuTeam])||0;
+
+  if(userScore>cpuScore){
+   playVoiceSequence(["game-set.wav","you-win.wav"],"cpu");
+  }else if(userScore<cpuScore){
+   playVoiceSequence(["game-set.wav","cpu-win.wav"],"cpu");
+  }else{
+   playVoice("game-set.wav","cpu");
+  }
+ }
+
+ renderCpuGame();
 }
 
 window.startCpuGame=()=>{
  if(cpuTimer)clearTimeout(cpuTimer);
+
+ cpuTimer=null;
+ cpuExtraAnnounced=false;
+ cpuFinishedAnnounced=false;
 
  hide("gamePanel");
  hide("cpuFinishedArea");
@@ -2270,6 +2649,7 @@ window.startCpuGame=()=>{
   maxInnings:innings,
   inning:1,
   half:"表",
+  halfAtBats:0,
   outs:0,
   bases:[false,false,false],
   baseRunners:[null,null,null],
@@ -2287,9 +2667,14 @@ window.startCpuGame=()=>{
   },
 
   numberUsage:{
-   totalNumbers:0,
-   fourDigit:{},
-   singleDigits:{}
+   user:{
+    pitches:emptyNumberUsage(),
+    guesses:emptyNumberUsage()
+   },
+   cpu:{
+    pitches:emptyNumberUsage(),
+    guesses:emptyNumberUsage()
+   }
   },
 
   gameLog:[],
@@ -2397,7 +2782,7 @@ function renderCpuPitchingStats(){
  });
 }
 
-/* CPU数字使用率の表示 */
+/* CPUのプレイヤー別数字使用率 */
 function renderCpuNumberUsage(){
  const area=$("cpuNumberUsageStats");
  if(!area||!cpuGame)return;
@@ -2405,14 +2790,39 @@ function renderCpuNumberUsage(){
  area.innerHTML="";
 
  const title=document.createElement("h3");
- title.textContent="数字の使用率";
+ title.textContent="プレイヤー別・数字の使用率";
  area.appendChild(title);
 
- appendNumberUsageSummary(
-  area,
-  cpuGame.numberUsage||{},
-  "全体の数字使用率（打者の予想＋投手の秘密）"
- );
+ const players=[
+  {id:"user",name:"あなた"},
+  {id:"cpu",name:"CPU"}
+ ];
+
+ players.forEach(player=>{
+  const usage=cpuGame.numberUsage?.[player.id]||{};
+
+  const section=document.createElement("div");
+  section.className="number-player";
+
+  const name=document.createElement("div");
+  name.className="number-player-name";
+  name.textContent=player.name;
+  section.appendChild(name);
+
+  appendNumberUsageSummary(
+   section,
+   usage.pitches||emptyNumberUsage(),
+   "投手として設定した秘密の数字"
+  );
+
+  appendNumberUsageSummary(
+   section,
+   usage.guesses||emptyNumberUsage(),
+   "打者として予想した数字"
+  );
+
+  area.appendChild(section);
+ });
 }
 
 /* CPU試合履歴の表示 */
@@ -2444,16 +2854,22 @@ function renderCpuGameLog(){
    .map(r=>r.name+"（"+r.number+"）")
    .join("、");
 
-  row.textContent=
+  row.appendChild(document.createTextNode(
    (index+1)+"打席目　"+
    item.inning+"回"+item.half+
    " / 打者："+item.batterName+
    " / 予想："+item.guess+
    " / 守備："+item.secret+
-   " / "+item.label+
+   " / "
+  ));
+
+  appendLogResult(row,item);
+
+  row.appendChild(document.createTextNode(
    (item.reachedBase?" / 出塁："+item.batterName+"（"+item.guess+"）":"")+
    " / 得点："+item.runs+
-   (scored?" / 得点者："+scored:"");
+   (scored?" / 得点者："+scored:"")
+  ));
 
   area.appendChild(row);
  });
@@ -2471,8 +2887,8 @@ function renderCpuGame(){
 
  renderCpuBattingStats();
  renderCpuPitchingStats();
- renderCpuNumberUsage();
  renderCpuGameLog();
+ renderCpuNumberUsage();
 
  $("cpuInning").textContent=cpuGame.inning>cpuGame.maxInnings
   ?"延長"+(cpuGame.inning-cpuGame.maxInnings)+"回"
@@ -2483,6 +2899,10 @@ function renderCpuGame(){
 
  for(let i=1;i<=3;i++){
   $("cpuBase"+i).classList.toggle("on",!!cpuGame.bases[i-1]);
+ }
+
+ if(cpuGame.lastResult){
+  renderPlayResult($("cpuLastResult"),cpuGame.lastResult);
  }
 
  hide("cpuDefenseArea");
@@ -2537,7 +2957,6 @@ window.cpuSubmitDefense=()=>{
  show("cpuWaitingArea");
  $("cpuWaitingArea").textContent="CPUが数字を予想しています...";
 
- /* 待機表示を維持してCPUの判定を進める */
  cpuTimer=setTimeout(()=>{
   if(!cpuGame||cpuGame.finished||cpuUserIsBatting())return;
 
@@ -2587,6 +3006,11 @@ function cpuResolveAtBat(guess,secret=null){
  const pitcherName=pitcherId==="user"?"あなた":"CPU";
 
  const labels=["アウト","ヒット","ツーベース","スリーベース","ホームラン"];
+ const scoresBefore={...cpuGame.scores};
+ const wasFirstBatter=(Number(cpuGame.halfAtBats)||0)===0;
+
+ cpuGame.halfAtBats=(Number(cpuGame.halfAtBats)||0)+1;
+
  let runs=0;
  let scoredRunners=[];
 
@@ -2604,20 +3028,20 @@ function cpuResolveAtBat(guess,secret=null){
 
  cpuGame.batterStats[batterId]=batterStat;
 
- /* 打者の予想数字と投手の秘密の数字を集計 */
- const numbers=[secret,guess];
+ /* 投手の秘密の数字と打者の予想数字を個別に記録 */
+ recordPlayerNumberUsage(
+  cpuGame.numberUsage,
+  pitcherId,
+  "pitches",
+  secret
+ );
 
- for(const number of numbers){
-  cpuGame.numberUsage.totalNumbers++;
-
-  cpuGame.numberUsage.fourDigit[number]=
-   (Number(cpuGame.numberUsage.fourDigit[number])||0)+1;
-
-  for(const digit of number){
-   cpuGame.numberUsage.singleDigits[digit]=
-    (Number(cpuGame.numberUsage.singleDigits[digit])||0)+1;
-  }
- }
+ recordPlayerNumberUsage(
+  cpuGame.numberUsage,
+  batterId,
+  "guesses",
+  guess
+ );
 
  /* 打者が出塁した場合のランナー情報 */
  const batterRunner={
@@ -2671,6 +3095,22 @@ function cpuResolveAtBat(guess,secret=null){
  if(hits>0)cpuGame.hits[batting]++;
  if(runs>0)cpuGame.scores[batting]+=runs;
 
+ /* スコア変化から同点・逆転を読み上げる */
+ cpuAnnounceScoreChange(scoresBefore,cpuGame.scores);
+
+ /* 特別な打撃結果を判定 */
+ const playTags=classifyPlay({
+  hits,
+  runs,
+  batting,
+  scoresBefore,
+  scoresAfter:cpuGame.scores,
+  inning:logInning,
+  half:logHalf,
+  maxInnings:cpuGame.maxInnings,
+  wasFirstBatter
+ });
+
  /* 投手別の投球回・失点を集計 */
  const pitcherStat=cpuGame.pitcherStats[pitcherId]||
   {outs:0,runs:0};
@@ -2695,7 +3135,8 @@ function cpuResolveAtBat(guess,secret=null){
   label:labels[hits],
   reachedBase:hits>0,
   runs,
-  scoredRunners
+  scoredRunners,
+  playTags
  });
 
  if(cpuGame.gameLog.length>300){
@@ -2703,23 +3144,32 @@ function cpuResolveAtBat(guess,secret=null){
  }
 
  cpuGame.lastResult={
-  hits,guess,secret,runs,label:labels[hits]
+  hits,
+  guess,
+  secret,
+  runs,
+  label:labels[hits],
+  playTags
  };
 
- const scoredText=scoredRunners.length
-  ?" / 得点者："+scoredRunners.map(r=>r.name+"（"+r.number+"）").join("、")
-  :"";
+ renderPlayResult($("cpuLastResult"),cpuGame.lastResult);
 
- $("cpuLastResult").textContent=
-  labels[hits]+"（一致 "+hits+"個）"+
-  " / 予想："+guess+
-  " / 守備側："+secret+
-  " / 得点："+runs+
-  scoredText;
-
+ /* 打席結果の音声 */
  cpuPlaySound(hits);
 
  cpuGame.atBatNo++;
+
+ /* 最終回以降の裏で後攻が勝ち越したら即終了 */
+ if(
+  logHalf==="裏"&&
+  logInning>=cpuGame.maxInnings&&
+  cpuGame.scores.second>cpuGame.scores.first
+ ){
+  cpuGame.bases=[false,false,false];
+  cpuGame.baseRunners=[null,null,null];
+  cpuFinishGame();
+  return;
+ }
 
  if(cpuGame.outs>=3){
   cpuGame.outs=0;
@@ -2731,16 +3181,16 @@ function cpuResolveAtBat(guess,secret=null){
    ){
     cpuGame.bases=[false,false,false];
     cpuGame.baseRunners=[null,null,null];
-    cpuGame.finished=true;
-    renderCpuGame();
+    cpuFinishGame();
     return;
    }
 
    cpuGame.half="裏";
+   cpuGame.halfAtBats=0;
 
    if(cpuGame.inning>cpuGame.maxInnings){
     cpuGame.bases=[true,true,false];
-    cpuGame.baseRunners=[null,null,null];
+    cpuGame.baseRunners=createTiebreakRunners();
    }else{
     cpuGame.bases=[false,false,false];
     cpuGame.baseRunners=[null,null,null];
@@ -2755,18 +3205,25 @@ function cpuResolveAtBat(guess,secret=null){
     if(first!==second){
      cpuGame.bases=[false,false,false];
      cpuGame.baseRunners=[null,null,null];
-     cpuGame.finished=true;
-     renderCpuGame();
+     cpuFinishGame();
      return;
     }
 
+    /* 規定回終了時に同点なら延長戦へ */
     cpuGame.inning++;
     cpuGame.half="表";
+    cpuGame.halfAtBats=0;
     cpuGame.bases=[true,true,false];
-    cpuGame.baseRunners=[null,null,null];
+    cpuGame.baseRunners=createTiebreakRunners();
+
+    if(!cpuExtraAnnounced){
+     cpuExtraAnnounced=true;
+     playVoice("extra.wav","cpu");
+    }
    }else{
     cpuGame.inning++;
     cpuGame.half="表";
+    cpuGame.halfAtBats=0;
     cpuGame.bases=[false,false,false];
     cpuGame.baseRunners=[null,null,null];
    }
@@ -2774,20 +3231,22 @@ function cpuResolveAtBat(guess,secret=null){
    cpuPlayTransition("side");
   }
  }else{
-  cpuPlayTransition("batter");
+  /* 打者交代用の専用音声は用意されていないため無音 */
  }
 
  cpuGame.secret=null;
  cpuGame.phase="setup";
 
  renderCpuGame();
-};
+}
 
 window.exitCpuGame=()=>{
  if(cpuTimer)clearTimeout(cpuTimer);
 
  cpuTimer=null;
  cpuGame=null;
+ cpuExtraAnnounced=false;
+ cpuFinishedAnnounced=false;
 
  hide("cpuGamePanel");
  show("gamePanel");
