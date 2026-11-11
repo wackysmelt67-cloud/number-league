@@ -469,6 +469,11 @@ footer{color:#8294aa;font-size:11px;margin-top:25px}
 <div id="spectatorWaiting" class="result hidden">試合開始を待っています。</div>
 
 <div id="gameArea" class="hidden">
+<div id="gameControlArea" class="result">
+ <button id="resetGameButton" class="danger hidden" onclick="resetGame()">試合をリセット</button>
+ <button id="resumeGameButton" class="secondary hidden" onclick="rejoinGame()">この試合に復帰する</button>
+ <div class="note">試合は自動保存されます。画面を再読み込みしても同じ部屋から復帰できます。</div>
+</div>
 <div class="scoreboard">
  <div class="score">
   <small>先攻</small>
@@ -611,6 +616,9 @@ let roomUnsubscribe=null;
 let gameUnsubscribe=null;
 let chatUnsubscribers=[];
 let resolvingId=null;
+let resolveRetryTimer=null;
+let resolveRetryAtBatId=null;
+let resolveRetryCount=0;
 let lastGameWasFinished=false;
 let lastSoundResultId=null;
 let lastObservedAtBatId=null;
@@ -980,6 +988,8 @@ function watchRoom(code,role){
 
  currentRoomCode=code;
  currentRole=role;
+ localStorage.setItem("numberLeagueLastRoomCode",code);
+ localStorage.setItem("numberLeagueLastRoomRole",role);
  lastGameWasFinished=false;
  lastObservedAtBatId=null;
  lastObservedHalf=null;
@@ -1046,6 +1056,10 @@ function watchGame(){
   if(game.phase==="finished")lastGameWasFinished=true;
 
   renderGame(game);
+
+  if(game.phase!=="resolving"){
+   clearResolveRetry();
+  }
 
   if(
    !isSpectator()&&
@@ -1734,6 +1748,10 @@ function announceOnlineGameFinished(g){
 
 function renderGame(g){
  const me=uid();
+ const resetButton=$("resetGameButton");
+ if(resetButton){
+  resetButton.classList.toggle("hidden",isSpectator()||me!==currentRoom?.hostUid);
+ }
  const batting=battingTeam(g);
  const defending=defendingTeam(g);
 
@@ -1842,6 +1860,7 @@ function renderGame(g){
  hide("defenseArea");
  hide("attackArea");
  hide("waitingArea");
+ hide("resumeGameButton");
  hide("finishedArea");
  hide("pitcherSwitchArea");
 
@@ -1874,7 +1893,8 @@ function renderGame(g){
  if(meData?.active===false){
   $("turnInfo").textContent+=" / あなたは退出中です。";
   show("waitingArea");
-  $("waitingArea").textContent="復帰するには部屋コードから再参加してください。";
+  $("waitingArea").textContent="試合データは保存されています。復帰ボタンから続きに戻れます。";
+  show("resumeGameButton");
   return;
  }
 
@@ -2215,6 +2235,70 @@ function calculateNext(g,hits,secret,guess){
  return next;
 }
 
+/* Firebase通信が一定時間返らない場合に備える */
+function withTimeout(promise,milliseconds,message){
+ return new Promise((resolve,reject)=>{
+  const timer=setTimeout(()=>reject(new Error(message)),milliseconds);
+  Promise.resolve(promise).then(value=>{
+   clearTimeout(timer);
+   resolve(value);
+  }).catch(error=>{
+   clearTimeout(timer);
+   reject(error);
+  });
+ });
+}
+
+function clearResolveRetry(){
+ if(resolveRetryTimer){
+  clearTimeout(resolveRetryTimer);
+  resolveRetryTimer=null;
+ }
+ resolveRetryAtBatId=null;
+ resolveRetryCount=0;
+}
+
+function scheduleResolveRetry(g){
+ if(resolveRetryAtBatId!==g.atBatId){
+  clearResolveRetry();
+  resolveRetryAtBatId=g.atBatId;
+ }
+ if(resolveRetryTimer)return;
+
+ const delays=[2000,4000,7000,10000,15000,20000,30000,30000];
+ if(resolveRetryCount>=delays.length){
+  status("判定が再開できません。投手側の画面を再読み込みしてください。");
+  return;
+ }
+
+ const delay=delays[resolveRetryCount++];
+ status("通信を確認しています。打席結果を自動で再判定します...");
+ resolveRetryTimer=setTimeout(async()=>{
+  resolveRetryTimer=null;
+  try{
+   const latestSnap=await withTimeout(
+    get(gameRef()),10000,"試合データの取得がタイムアウトしました。"
+   );
+   if(!latestSnap.exists()){
+    clearResolveRetry();
+    return;
+   }
+   const latest=latestSnap.val();
+   if(latest.phase!=="resolving"||latest.atBatId!==g.atBatId){
+    clearResolveRetry();
+    return;
+   }
+   if(latest.pitcherUid!==uid()){
+    clearResolveRetry();
+    return;
+   }
+   resolveAtBat(latest);
+  }catch(e){
+   scheduleResolveRetry(g);
+  }
+ },delay);
+}
+
 async function resolveAtBat(g){
  if(resolvingId===g.atBatId)return;
  resolvingId=g.atBatId;
@@ -2224,7 +2308,9 @@ async function resolveAtBat(g){
    "atBatSecrets/"+currentRoomCode+"/"+g.pitcherUid+"/"+g.atBatId
   );
 
-  const snap=await get(secretRef);
+  const snap=await withTimeout(
+   get(secretRef),10000,"秘密の数字の取得がタイムアウトしました。"
+  );
   if(!snap.exists())throw new Error("秘密の数字が見つかりません。");
 
   const secret=String(snap.val().number).padStart(4,"0");
@@ -2235,16 +2321,35 @@ async function resolveAtBat(g){
    if(secret[i]===guess[i])hits++;
   }
 
-  await runTransaction(gameRef(),current=>{
-   if(!current||
-    current.phase!=="resolving"||
-    current.atBatId!==g.atBatId||
-    current.pitcherUid!==uid())return;
+  const result=await withTimeout(
+   runTransaction(gameRef(),current=>{
+    if(!current||
+     current.phase!=="resolving"||
+     current.atBatId!==g.atBatId||
+     current.pitcherUid!==uid())return;
 
-   return calculateNext(current,hits,secret,guess);
-  });
+    return calculateNext(current,hits,secret,guess);
+   }),
+   12000,
+   "打席結果の保存がタイムアウトしました。"
+  );
+
+  if(result.committed){
+   clearResolveRetry();
+  }else{
+   const latestSnap=await withTimeout(
+    get(gameRef()),10000,"試合状態の確認がタイムアウトしました。"
+   );
+   const latest=latestSnap.val();
+   if(latest?.phase==="resolving"&&latest?.atBatId===g.atBatId){
+    scheduleResolveRetry(latest);
+   }else{
+    clearResolveRetry();
+   }
+  }
  }catch(e){
-  status("判定エラー："+e.message);
+  status("通信が不安定なため、判定を自動で再試行します。");
+  scheduleResolveRetry(g);
  }finally{
   resolvingId=null;
  }
@@ -2319,6 +2424,39 @@ window.leaveGame=async()=>{
   status("一時退出しました。部屋コードから再参加できます。");
  }catch(e){
   status("退出エラー："+e.message);
+ }
+};
+
+window.resetGame=async()=>{
+ if(!currentRoom||isSpectator()||uid()!==currentRoom.hostUid){
+  status("試合をリセットできるのは部屋主だけです。");
+  return;
+ }
+ if(!confirm("試合データをすべて削除して、試合前の状態に戻しますか？\nこの操作は取り消せません。"))return;
+
+ try{
+  status("試合をリセットしています...");
+  const updates={};
+  updates["gameStates/"+currentRoomCode]=null;
+  updates["atBatSecrets/"+currentRoomCode]=null;
+  for(const id of Object.keys(currentRoom.players||{})){
+   updates["rooms/"+currentRoomCode+"/players/"+id+"/ready"]=false;
+  }
+  await update(ref(database),updates);
+
+  clearResolveRetry();
+  lastGameWasFinished=false;
+  lastObservedAtBatId=null;
+  lastObservedHalf=null;
+  lastObservedBatterUid=null;
+  lastObservedAtBatNo=null;
+  lastSoundResultId=null;
+  lastObservedScores=null;
+  lastExtraAnnounced=false;
+  lastFinishedAnnouncementKey=null;
+  status("試合をリセットしました。全員が準備完了すると新しい試合を開始できます。");
+ }catch(e){
+  status("リセットエラー："+e.message);
  }
 };
 
@@ -3295,8 +3433,50 @@ $("playerName")?.addEventListener("change",()=>{
  if(name)localStorage.setItem("numberLeaguePlayerName",name);
 });
 
+let savedRoomRestoreStarted=false;
+
+async function restoreSavedRoomAfterReload(){
+ if(savedRoomRestoreStarted||!uid())return;
+ savedRoomRestoreStarted=true;
+ const code=(localStorage.getItem("numberLeagueLastRoomCode")||"").trim().toUpperCase();
+ if(!/^[A-HJ-NP-Z2-9]{8}$/.test(code))return;
+
+ try{
+  const snap=await get(ref(database,"rooms/"+code));
+  if(!snap.exists()){
+   localStorage.removeItem("numberLeagueLastRoomCode");
+   localStorage.removeItem("numberLeagueLastRoomRole");
+   return;
+  }
+  const room=snap.val();
+  const me=uid();
+  if(room.players?.[me]){
+   watchRoom(code,"player");
+   if(room.players[me].active===false){
+    status("前回の部屋を復元しました。『ゲームに復帰する』から試合に戻れます。");
+   }else{
+    status("前回の試合を復元しています...");
+   }
+   return;
+  }
+  if(room.spectators?.[me]){
+   watchRoom(code,"spectator");
+   status("前回の観戦部屋を復元しました。");
+   return;
+  }
+  localStorage.removeItem("numberLeagueLastRoomCode");
+  localStorage.removeItem("numberLeagueLastRoomRole");
+ }catch(e){
+  savedRoomRestoreStarted=false;
+  status("前回の試合を復元できませんでした。通信状態を確認して再読み込みしてください。");
+ }
+}
+
 onAuthStateChanged(auth,user=>{
- if(user)status("Firebase接続成功！匿名ログイン済みです。");
+ if(user){
+  status("Firebase接続成功！匿名ログイン済みです。");
+  restoreSavedRoomAfterReload();
+ }
 });
 
 signInAnonymously(auth).catch(e=>{
